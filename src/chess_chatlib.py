@@ -1,6 +1,6 @@
 # Protocol Constants
 
-CMD_FIELD_LENGTH = 16  # Exact length of cmd field (in bytes)
+CMD_FIELD_LENGTH = 32  # Exact length of cmd field (in bytes)
 LENGTH_FIELD_LENGTH = 4  # Exact length of length field (in bytes)
 MAX_DATA_LENGTH = 10 ** LENGTH_FIELD_LENGTH - 1  # Max size of data field according to protocol
 MSG_HEADER_LENGTH = CMD_FIELD_LENGTH + 1 + LENGTH_FIELD_LENGTH + 1  # Exact size of header (CMD+LENGTH fields)
@@ -18,20 +18,26 @@ PROTOCOL_CLIENT = {
     "multiplayer": "PVP",
     "get_my_rating": "MY_RATING",
     "get_logged_users": "LOGGED"
-}  # .. Add more commands if needed
+}
 
 PROTOCOL_SERVER = {
     "login_ok_msg": "LOGIN_OK",
     "login_failed_msg": "ERROR",
+    "looking_for_opponent_msg": "LOOKING_FOR_OPPONENT",
+    "no_opponent_found_msg": "NO_OPPONENT_FOUND",
     "game_started_msg": "GAME_STARTED",
+    "opponent_quit_msg": "OPPONENT_QUIT",
     "your_move_msg": "YOUR_MOVE",
     "invalid_move_msg": "INVALID_MOVE",
+    "not_in_room_msg": "NOT_IN_ROOM",
     "opponent_move_msg": "OPPONENT_MOVE",
+    "game_over_msg": "GAME_OVER",
     "get_rating_msg": "YOUR_RATING",
-    "logged_users": "LOGGED_USERS_NAMES"
-}  # ..  Add more commands if needed
-
-# Other constants
+    "logged_users_msg": "LOGGED_USERS_NAMES",
+    "you_won": "you won",
+    "you_lost": 'you lost',
+    "tie": 'tie'
+}
 
 ERROR_RETURN = None  # What is returned in case of an error
 
@@ -74,11 +80,11 @@ def split_data(msg, expected_fields):
     using protocol's data field delimiter (|#) and validates that there are correct number of fields.
     Returns: list of fields if all ok. If some error occurred, returns None
     """
-    num_of_split = msg.count(DATA_DELIMITER)
+    num_of_split = msg.count(DATA_DELIMITER) + 1
     if expected_fields == num_of_split:
         return msg.split(DATA_DELIMITER)
     else:
-        return [ERROR_RETURN]
+        return ERROR_RETURN
 
 
 def join_data(msg_fields):
