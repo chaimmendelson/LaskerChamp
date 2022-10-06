@@ -91,19 +91,18 @@ def handle_pvp_request_message(conn):
 
 
 def handle_pve_request_message(conn, level):
+    color_dict = {0: 'white', 1: 'black'}
     player = conn.getpeername()
     level_regex = '^(1?[0-9]|20)$'
     if not re.search(level_regex, level):
         build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_level'], '')
     else:
         chess_rooms.add_room(conn.getpeername(), level=level)
-        color = chess_rooms.color(player)
-        if color:
-            color = 'black'
-        else:
-            color = 'white'
+        color = color_dict[chess_rooms.color(player)]
         msg = chatlib.PROTOCOL_SERVER["game_started_msg"]
         build_and_send_message(LOGGED_USERS_CONN[player], msg, chatlib.join_data([color, START_FEN]))
+        if chess_rooms.color(player):
+            chess_rooms.update_status(player)
 
 
 def check_waiting_room():
