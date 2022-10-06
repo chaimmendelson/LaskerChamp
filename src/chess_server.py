@@ -10,6 +10,7 @@ import logging
 import chess_rooms
 import time
 from datetime import datetime
+import re
 
 # GLOBALS
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -89,16 +90,20 @@ def handle_pvp_request_message(conn):
         WAITING_ROOM.append([conn, datetime.now()])
 
 
-def handle_pve_request_message(conn):
+def handle_pve_request_message(conn, level):
     player = conn.getpeername()
-    chess_rooms.add_room(conn.getpeername())
-    color = chess_rooms.color(player)
-    if color:
-        color = 'black'
+    level_regex = '^(1?[0-9]|20)$'
+    if not re.search(level_regex, level):
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_level'], '')
     else:
-        color = 'white'
-    msg = chatlib.PROTOCOL_SERVER["game_started_msg"]
-    build_and_send_message(LOGGED_USERS_CONN[player], msg, chatlib.join_data([color, START_FEN]))
+        chess_rooms.add_room(conn.getpeername(), level=level)
+        color = chess_rooms.color(player)
+        if color:
+            color = 'black'
+        else:
+            color = 'white'
+        msg = chatlib.PROTOCOL_SERVER["game_started_msg"]
+        build_and_send_message(LOGGED_USERS_CONN[player], msg, chatlib.join_data([color, START_FEN]))
 
 
 def check_waiting_room():
@@ -236,7 +241,7 @@ def handle_client_message(conn, cmd, data):
     elif cmd == chatlib.PROTOCOL_CLIENT["multiplayer"]:
         handle_pvp_request_message(conn)
     elif cmd == chatlib.PROTOCOL_CLIENT["single-player"]:
-        handle_pve_request_message(conn)
+        handle_pve_request_message(conn, data)
     elif cmd == chatlib.PROTOCOL_CLIENT["get_logged_users"]:
         handle_logged_message(conn)
     else:

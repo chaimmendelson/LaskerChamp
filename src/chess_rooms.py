@@ -58,7 +58,7 @@ def print_board(fen):
 
 class ChessRoom:
 
-    def __init__(self, player1, player2='stockfish', fen=START_FEN, engine_elo=0, engine_level=0):
+    def __init__(self, player1, player2='stockfish', fen=START_FEN, engine_level=10):
         self.players = [player1, player2]
         shuffle(self.players)
         self.board = chess.Board(fen)
@@ -66,7 +66,6 @@ class ChessRoom:
         self.who_quit = self.players[0]
         self.turn = self.players[0]
         self.waiting = False
-        self.elo = engine_elo
         self.level = engine_level
 
     def __len__(self):
@@ -169,12 +168,12 @@ def commit_move(player, move) -> bool:
     return True, ''
 
 
-def add_room(player1, player2='', fen=START_FEN, elo=0, level=0) -> None:
+def add_room(player1, player2='', fen=START_FEN, level=10) -> None:
     global CHESS_ROOMS
     if player2:
         CHESS_ROOMS.append(ChessRoom(player1, player2, fen))
     else:
-        CHESS_ROOMS.append(ChessRoom(player1, 'stockfish', fen, elo, level))
+        CHESS_ROOMS.append(ChessRoom(player1, 'stockfish', fen, int(level)))
 
 
 def is_in_room(player) -> bool:
@@ -200,13 +199,8 @@ def commit_engine_move(player):
     global ANSWERED
     stockfish = Stockfish(STOCKFISH_PATH)
     room = _get_room(player)
-    if room.level:
-        stockfish.set_skill_level(room.level)
-    elif room.elo:
-        stockfish.set_elo_rating(room.elo)
-    else:
-        stockfish.set_elo_rating(500)
     fen = str(_get_room(player))
+    stockfish.set_skill_level(room.level)
     stockfish.set_fen_position(fen)
     room.board.push(chess.Move.from_uci(stockfish.get_best_move()))
     room.update_turn()

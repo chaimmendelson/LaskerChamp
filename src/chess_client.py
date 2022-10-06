@@ -1,5 +1,6 @@
 import socket
 import chess_chatlib as chatlib
+import re
 
 SERVER_IP = "127.0.0.1"  # Our server will run on same computer as client
 SERVER_PORT = 5678
@@ -85,12 +86,23 @@ def get_logged_users(conn):
     print(data)
 
 
+def get_level_choice():
+    while True:
+        level = input('enter level (0-20): ')
+        level_regex = '^(1?[0-9]|20)$'
+        if re.search(level_regex, level):
+            break
+    return level
+
+
 def play_game(conn, pvp=True):
     if pvp:
         msg = chatlib.PROTOCOL_CLIENT["multiplayer"]
+        data = ''
     else:
+        data = get_level_choice()
         msg = chatlib.PROTOCOL_CLIENT['single-player']
-    msg_code, data = build_send_recv_parse(conn, msg, "")
+    msg_code, data = build_send_recv_parse(conn, msg, data)
     if msg_code == chatlib.PROTOCOL_SERVER['no_opponent_found_msg']:
         print('no opponent found')
         return
