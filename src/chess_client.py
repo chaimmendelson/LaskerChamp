@@ -85,8 +85,12 @@ def get_logged_users(conn):
     print(data)
 
 
-def play_pvp_game(conn):
-    msg_code, data = build_send_recv_parse(conn, chatlib.PROTOCOL_CLIENT["multiplayer"], "")
+def play_game(conn, pvp=True):
+    if pvp:
+        msg = chatlib.PROTOCOL_CLIENT["multiplayer"]
+    else:
+        msg = chatlib.PROTOCOL_CLIENT['single-player']
+    msg_code, data = build_send_recv_parse(conn, msg, "")
     if msg_code == chatlib.PROTOCOL_SERVER['no_opponent_found_msg']:
         print('no opponent found')
         return
@@ -157,6 +161,7 @@ def main():
     login(conn)
     while True:
         print("p        play PvP game\n"
+              "e        play PvE game\n"
               "s        Get my rating\n"
               "l        Get logged users list\n"
               "q        Quit\n")
@@ -164,7 +169,9 @@ def main():
         if choice == "s":
             get_rating(conn)
         elif choice == "p":
-            play_pvp_game(conn)
+            play_game(conn)
+        elif choice == "e":
+            play_game(conn, False)
         elif choice == "l":
             get_logged_users(conn)
         elif choice == "q":

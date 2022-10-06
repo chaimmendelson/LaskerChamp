@@ -58,11 +58,16 @@ def print_board(fen):
 
 class ChessRoom:
 
-    def __init__(self, player1, player2='stockfish', fen=START_FEN):
+    def __init__(self, player1, player2='stockfish', fen=START_FEN, engine_elo=0, engine_level=0):
         self.players = [player1, player2]
         shuffle(self.players)
         self.board = chess.Board(fen)
         self.opponent_left_match = False
+        self.who_quit = self.players[0]
+        self.turn = self.players[0]
+        self.waiting = False
+        self.elo = engine_elo
+        self.level = engine_level
 
     def __len__(self):
         return len(self.board.move_stack)
@@ -73,61 +78,80 @@ class ChessRoom:
     def __repr__(self):
         return f'chess.Board({self.board.fen()})'
 
+    def update_turn(self):
+        if self.turn == self.players[0]:
+            self.turn = self.players[1]
+        else:
+            self.turn = self.players[0]
+        self.update_status()
+
+    def update_status(self):
+        self.waiting = not self.waiting
+
+
 CHESS_ROOMS = []
 
 
 def quit_match(player):
-    get_room(player).opponent_left_match = True
+    _get_room(player).opponent_left_match = True
+    _get_room(player).who_quit = player
+
+
+def get_quiting_player(player):
+    return _get_room(player).who_quit
 
 
 def did_opponent_quit(player):
-    return get_room(player).opponent_left_match
+    return _get_room(player).opponent_left_match
 
 
 def is_pvp_room(player):
-    return 'stockfish' not in get_room(player).players
+    return 'stockfish' not in _get_room(player).players
 
 
 def get_fen(player):
-    return str(get_room(player))
+    return str(_get_room(player))
+
+
+def get_white_player(player):
+    return _get_room(player).players[0]
 
 
 def get_opponent(player):
-    players = get_room(player).players
+    players = _get_room(player).players
     if player == players[0]:
         return players[1]
     return players[0]
 
 
 def get_last_move(player):
-    board = get_room(player).board
+    board = _get_room(player).board
     move = board.pop()
     board.push(move)
     return str(move)
 
 
 def is_client_turn(player) -> bool:
-    board = get_room(player).board
-    return board.turn != color(player)
+    return player == _get_room(player).turn
 
 
 def color(player):
-    return get_room(player).players.index(player)
+    return _get_room(player).players.index(player)
 
 
 def is_game_over(player) -> bool:
-    return get_room(player).board.result() != '*'
+    return _get_room(player).board.result() != '*'
 
 
 def get_game_results(player) -> int:
-    room = get_room(player)
+    room = _get_room(player)
     if is_game_over(player):
         result = room.board.result().split('-')
         if result[0] == '1/2':
             return -1
         if color(player):
-            return int(result[0])
-        return int(result[1])
+            return int(result[1])
+        return int(result[0])
     return None
 
 
@@ -135,18 +159,22 @@ def commit_move(player, move) -> bool:
     regex = r'^[a-h][1-8][a-h][1-8][q,r,b,n]?$'
     if not re.search(regex, move):
         return False, 'invalid move string'
-    board = get_room(player).board
-    if not chess.Move.from_uci(move) in board.legal_moves:
+    room = _get_room(player)
+    if not chess.Move.from_uci(move) in room.board.legal_moves:
         return False, 'invalid move'
     if not is_client_turn(player):
         return False, 'not your turn'
-    board.push(chess.Move.from_uci(move))
+    room.board.push(chess.Move.from_uci(move))
+    room.update_turn()
     return True, ''
 
 
-def add_room(player1, player2='stockfish', fen=START_FEN) -> None:
+def add_room(player1, player2='', fen=START_FEN, elo=0, level=0) -> None:
     global CHESS_ROOMS
-    CHESS_ROOMS.append(ChessRoom(player1, player2, fen))
+    if player2:
+        CHESS_ROOMS.append(ChessRoom(player1, player2, fen))
+    else:
+        CHESS_ROOMS.append(ChessRoom(player1, 'stockfish', fen, elo, level))
 
 
 def is_in_room(player) -> bool:
@@ -156,7 +184,7 @@ def is_in_room(player) -> bool:
     return False
 
 
-def get_room(player) -> ChessRoom:
+def _get_room(player) -> ChessRoom:
     for room in CHESS_ROOMS:
         if player in room.players:
             return room
@@ -165,22 +193,38 @@ def get_room(player) -> ChessRoom:
 
 def close_room(player) -> None:
     global CHESS_ROOMS
-    CHESS_ROOMS.remove(get_room(player))
+    CHESS_ROOMS.remove(_get_room(player))
 
 
-def commit_engine_move(player, level):
+def commit_engine_move(player):
     global ANSWERED
     stockfish = Stockfish(STOCKFISH_PATH)
-    stockfish.set_skill_level(level)
-    fen = str(get_room(player))
+    room = _get_room(player)
+    if room.level:
+        stockfish.set_skill_level(room.level)
+    elif room.elo:
+        stockfish.set_elo_rating(room.elo)
+    else:
+        stockfish.set_elo_rating(500)
+    fen = str(_get_room(player))
     stockfish.set_fen_position(fen)
-    get_room(player).board.push(chess.Move.from_uci(stockfish.get_best_move()))
+    room.board.push(chess.Move.from_uci(stockfish.get_best_move()))
+    room.update_turn()
 
 
-def get_engine_move(player, level):
-    t = threading.Thread(target=commit_engine_move, args=(player, level, ))
+def get_engine_move(player):
+    update_status(player)
+    t = threading.Thread(target=commit_engine_move, args=(player, ))
     t.start()
     return t
+
+
+def update_status(player):
+    _get_room(player).update_status()
+
+
+def is_waiting(player):
+    return _get_room(player).waiting
 
 
 def test():
@@ -197,7 +241,7 @@ def test():
     print(now2 - now)"""
     player = 'a'
     add_room(player)
-    room = get_room(player)
+    room = _get_room(player)
     while True:
         # print_board(room.board.fen())
         t = get_engine_move(player, 10)

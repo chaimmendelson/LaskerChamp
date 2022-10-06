@@ -16,6 +16,7 @@ PROTOCOL_CLIENT = {
     "logout_msg": "LOGOUT",
     "my_move_msg": "MY_MOVE",
     "multiplayer": "PVP",
+    "single-player": "PVE",
     "get_my_rating": "MY_RATING",
     "get_logged_users": "LOGGED"
 }
