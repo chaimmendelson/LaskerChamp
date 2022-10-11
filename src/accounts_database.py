@@ -41,7 +41,6 @@ def get_constrains(column):
 def execute(code, fetchall=False, fetchmany=False, amount=1):
     data = ""
     connection = pg2.connect(database='chess_users', user='postgres', password=132005)
-    print(code)
     cursor = connection.cursor()
     cursor.execute(code)
     if fetchall:
@@ -78,16 +77,15 @@ def delete_row(username):
 
 
 def check_value(column, value):
-    match get_type(column):
-        case 'string':
-            if type(value) != str:
-                return False
-        case 'number':
-            if not value.isnumeric():
-                return False
-        case 'email':
-            if not validate_email(value):
-                return False
+    if get_type(column) == 'string':
+        if type(value) != str:
+            return False
+    elif get_type(column) == 'number':
+        if not value.isnumeric():
+            return False
+    elif get_type(column) == 'email':
+        if not validate_email(value):
+            return False
     if get_len(column):
         if len(str(value)) > get_len(column):
             return False
@@ -126,7 +124,7 @@ def get_all_users():
     return execute(f'select * from {TABLE_NAME};', fetchall=True)
 
 
-def printable_table(table=get_all_users()):
+def printable_table(table):
     table.insert(0, list(COLUMNS))
     for i in range(len(table)):
         table[i] = list(table[i])
