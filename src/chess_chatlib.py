@@ -24,6 +24,7 @@ PROTOCOL_CLIENT = {
 PROTOCOL_SERVER = {
     "login_ok_msg": "LOGIN_OK",
     "login_failed_msg": "ERROR",
+    "logged_users": "LOGGED_USERS",
     "looking_for_opponent_msg": "LOOKING_FOR_OPPONENT",
     "no_opponent_found_msg": "NO_OPPONENT_FOUND",
     "game_started_msg": "GAME_STARTED",

@@ -2,7 +2,8 @@ import socket
 import chess_chatlib as chatlib
 import re
 
-SERVER_IP = "127.0.0.1"  # Our server will run on same computer as client
+SERVER_IP = "127.0.0.1"
+# 34.125.51.194
 SERVER_PORT = 5678
 
 # HELPER SOCKET METHODS
