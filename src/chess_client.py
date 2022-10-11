@@ -32,7 +32,7 @@ def build_and_send_message(conn, code, data):
     """
     Builds a new message using chatlib, wanted code and message.
     Prints debug info, then sends it to the given socket.
-    Parameters: conn (socket object), code (str), data (str)
+    Parameters: CONN (socket object), code (str), data (str)
     Returns: Nothing
     """
     conn.send(chatlib.build_message(code, data).encode())
@@ -42,7 +42,7 @@ def recv_message_and_parse(conn):
     """
     Receives a new message from given socket,
     then parses the message using chatlib.
-    Parameters: conn (socket object)
+    Parameters: CONN (socket object)
     Returns: cmd (str) and data (str) of the received message.
     If error occurred, will return None, None"""
     return chatlib.parse_message(conn.recv(1024).decode())

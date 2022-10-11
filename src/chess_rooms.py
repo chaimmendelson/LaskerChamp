@@ -3,6 +3,8 @@ import chess.engine
 import chess
 import platform
 from random import shuffle
+
+import psycopg2 as psycopg2
 from stockfish import Stockfish
 import threading
 if platform.uname().system == 'Windows':
@@ -233,7 +235,7 @@ def test():
     print(ANSWERED)
     now2 = datetime.now()
     print(now2 - now)"""
-    player = 'a'
+    """player = 'a'
     add_room(player)
     room = _get_room(player)
     while True:
@@ -248,7 +250,7 @@ def test():
         if is_game_over(player):
             break
     print_board(room.board.fen())
-    print(room.board.result())
+    print(room.board.result())"""
 
 
 
