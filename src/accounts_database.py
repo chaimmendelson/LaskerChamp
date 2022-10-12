@@ -1,7 +1,27 @@
+import re
+
 import psycopg2 as pg2
-import hashlib
 import requests
 
+
+class InvalidUserData(Exception):
+    pass
+
+
+class InvalidUserName(Exception):
+    pass
+
+
+class TooFewArguments(Exception):
+    pass
+
+
+class TooManyArguments(Exception):
+    pass
+
+
+class InvalidColumn(Exception):
+    pass
 
 TABLE_NAME = 'accounts'
 
@@ -24,6 +44,9 @@ COLUMNS = {
     LAST_ENTRY: {C_TYPE: 'timestamp', C_LEN: None, C_CONSTRAINS: ''},
     CREATION_DATE: {C_TYPE: 'timestamp', C_LEN: None, C_CONSTRAINS: ''}
 }
+
+MANUALLY_MUTABLE_COLUMNS = [USERNAME, PASSWORD, EMAIL, ELO]
+COLUMNS_L = list(COLUMNS)
 
 
 def get_len(column):
@@ -68,56 +91,71 @@ def drop_table():
     execute(f"drop table if exists {TABLE_NAME};")
 
 
+def reset_table():
+    drop_table()
+    create_table()
+
+
 def is_value_in_column(column, value):
+    validate_column(column)
     return execute(f"select * from {TABLE_NAME} where {column} = '{value}';", fetchmany=True) != []
 
 
-def delete_row(username):
+def validate_user_name(username):
+    if not is_value_in_column(USERNAME, username):
+        raise InvalidUserName("user name doesnt exists")
+
+
+def validate_column(column):
+    if column not in COLUMNS_L:
+        raise InvalidColumn(f"column {column} does not exists in {TABLE_NAME}")
+
+
+def delete_user(username):
+    validate_user_name(username)
     execute(f"delete from {TABLE_NAME} where {USERNAME} = '{username}';")
 
 
 def check_value(column, value):
     if get_type(column) == 'string':
         if type(value) != str:
-            return False
-    elif get_type(column) == 'number':
-        if not value.isnumeric():
-            return False
-    elif get_type(column) == 'email':
-        if not validate_email(value):
-            return False
+            raise InvalidUserData(f"{column} must be string")
+    if get_type(column) == 'number':
+        if not value.isnumeric() or type(value) != str:
+            raise InvalidUserData(f"{column} must be numeric string")
     if get_len(column):
         if len(str(value)) > get_len(column):
-            return False
+            raise InvalidUserData(f"{column} length must be less then {get_len(column)} digits")
     if len(str(value)) == 0:
         if 'not null' in get_constrains(column):
-            return False
+            raise InvalidUserData(f"{column} cant be null")
     if 'unique' in get_constrains(column):
         if is_value_in_column(column, value):
-            return False
-    return True
+            raise InvalidUserData(f"the {column} ({value}) already exists")
+    if column == ELO:
+        if int(value) > 3000 or int(value) < 0:
+            raise InvalidUserData(f"elo cant exceed 3000 or be less then 0")
+    if get_type(column) == 'email':
+        if not validate_email(value):
+            raise InvalidUserData(f"invalid email")
 
 
-def insert_new_row(row):
-    columns = []
-    for column in list(COLUMNS):
-        if get_type(column) != 'timestamp':
-            columns.append(column)
-    if len(row) == len(columns):
-        for column, value in dict(zip(columns, row)).items():
-            if not check_value(column, value):
-                return False
-        temp = []
-        x = 0
-        for column in list(COLUMNS):
-            if get_type(column) == 'timestamp':
-                temp.append('current_timestamp')
-            else:
-                temp.append(f"'{row[x]}'")
-                x += 1
-        execute(f"insert into {TABLE_NAME}({', '.join(list(COLUMNS))}) values({', '.join(temp)});")
-        return True
-    return False
+def insert_new_user(user_data):
+    if len(user_data) < len(MANUALLY_MUTABLE_COLUMNS):
+        raise TooFewArguments()
+    if len(user_data) > len(MANUALLY_MUTABLE_COLUMNS):
+        raise TooManyArguments()
+    for column, value in dict(zip(MANUALLY_MUTABLE_COLUMNS, user_data)).items():
+        check_value(column, value)
+    temp = []
+    x = 0
+    for column in COLUMNS_L:
+        if get_type(column) == 'timestamp':
+            temp.append('current_timestamp')
+        else:
+            temp.append(f"'{user_data[x]}'")
+            x += 1
+    execute(f"insert into {TABLE_NAME}({', '.join(list(COLUMNS))}) values({', '.join(temp)});")
 
 
 def get_all_users():
@@ -125,7 +163,7 @@ def get_all_users():
 
 
 def printable_table(table):
-    table.insert(0, list(COLUMNS))
+    table.insert(0, COLUMNS_L)
     for i in range(len(table)):
         table[i] = list(table[i])
         for j in range(len(table[0])):
@@ -144,31 +182,44 @@ def printable_table(table):
     return data
 
 
-def does_user_exist(username):
-    return is_value_in_column(USERNAME, username)
-
-
-def get_data(username):
-    data = list(execute(f"select * from {TABLE_NAME} where {USERNAME} = '{username}';").fetchone())
-    return dict(zip(list(COLUMNS), data))
-
-
 def validate_email(email):
-    response = requests.get("https://isitarealemail.com/api/email/validate", params={'email': email})
-    status = response.json()['status']
-    return status == "valid"
+    email_regex = r'^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{0,253}\.[A-Z|a-z]{2,4}$'
+    try:
+        if re.fullmatch(email_regex, email):
+            response = requests.get("https://isitarealemail.com/api/email/validate", params={'email': email})
+            status = response.json()['status']
+            return status == "valid"
+        return False
+    except:
+        return re.fullmatch(email_regex, email)
+
+
+def get_value(username, column):
+    validate_user_name(username)
+    validate_column(column)
+    data = execute(f"select {column} from {TABLE_NAME} where {USERNAME} = '{username}';", fetchmany=True)
+    return data[0][0]
+
+
+def update_value(username, column, new_value):
+    validate_user_name(username)
+    validate_column(column)
+    if column not in MANUALLY_MUTABLE_COLUMNS:
+        raise InvalidColumn(f"column {column} cant be set manually")
+    check_value(column, new_value)
+    execute(f"update {TABLE_NAME} set {column} = '{new_value}'  where {USERNAME} = '{username}';")
 
 
 def update_entry(username):
+    validate_user_name(username)
     execute(f"update {TABLE_NAME} set {LAST_ENTRY} = current_timestamp  where {USERNAME} = '{username}';")
 
 
-def hash(password):
-    return hashlib.sha1(password.encode(), usedforsecurity=True).hexdigest()
-
-
 def main():
-    pass
+    try:
+        raise InvalidUserData("invalid email")
+    except Exception as e:
+        print(e)
 
 
 if __name__ == '__main__':

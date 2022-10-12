@@ -13,6 +13,7 @@ DATA_DELIMITER = "#"  # Delimiter in the data part of the message
 
 PROTOCOL_CLIENT = {
     "login_msg": "LOGIN",
+    "first_login_msg": "NEW_LOGIN",
     "logout_msg": "LOGOUT",
     "my_move_msg": "MY_MOVE",
     "multiplayer": "PVP",
@@ -23,6 +24,8 @@ PROTOCOL_CLIENT = {
 
 PROTOCOL_SERVER = {
     "login_ok_msg": "LOGIN_OK",
+    "account_created_msg": "CREATED",
+    "invalid_data_msg": "INVALID_DATA",
     "login_failed_msg": "ERROR",
     "logged_users": "LOGGED_USERS",
     "looking_for_opponent_msg": "LOOKING_FOR_OPPONENT",
@@ -86,7 +89,7 @@ def split_data(msg, expected_fields):
     if expected_fields == num_of_split:
         return msg.split(DATA_DELIMITER)
     else:
-        return ERROR_RETURN
+        return False
 
 
 def join_data(msg_fields):

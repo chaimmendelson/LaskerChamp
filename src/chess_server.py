@@ -1,7 +1,6 @@
 ##############################################################################
 #                                server.py                                   #
 ##############################################################################
-import json
 import socket
 import chess_chatlib as chatlib
 import select
@@ -11,12 +10,11 @@ import chess_rooms
 import time
 from datetime import datetime
 import re
+import handle_database as hd
 
 # GLOBALS
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-USERS_FILE = "src/users.txt"
 MESSAGES_TO_SEND = []
-USERS = {}
 LOGGED_USERS_CONN = {}
 LOGGED_USERS_NAMES = {}  # a dictionary of client hostnames to usernames
 WAITING_ROOM = []
@@ -43,17 +41,6 @@ def recv_message_and_parse(conn):
     return cmd, data
 
 
-def load_user_database():
-    with open(USERS_FILE, "r") as codes_file:
-        return json.loads(codes_file.read())
-
-
-def update_user_data():
-    data = json.dumps(USERS)
-    with open('src/users.txt', "w") as change:
-        change.write(data)
-
-
 def setup_socket():
     print("setting up server...")
     while True:
@@ -72,7 +59,7 @@ def send_error(conn, error_msg):
 
 
 def handle_get_rating_message(conn, username):
-    rating = str(USERS[username]["rating"])
+    rating = hd.get_elo(username)
     build_and_send_message(conn, chatlib.PROTOCOL_SERVER["get_rating_msg"], rating)
 
 
@@ -203,13 +190,18 @@ def handle_logout_message(conn):
 def handle_login_message(conn, data):
     global LOGGED_USERS_NAMES, LOGGED_USERS_CONN
     data = chatlib.split_data(data, 2)
-    if data[0] in USERS:
-        if data[1] == USERS[data[0]]["password"]:
-            if data[0] not in LOGGED_USERS_NAMES.values():
+    if not data:
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "too many or too less values")
+        return
+    username, password = data
+    if hd.does_username_exist(username):
+        if hd.validate_password(username, password):
+            if username not in LOGGED_USERS_NAMES.values():
                 build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_ok_msg"], "")
                 client_conn = conn.getpeername()
-                LOGGED_USERS_NAMES[client_conn] = data[0]
+                LOGGED_USERS_NAMES[client_conn] = username
                 LOGGED_USERS_CONN[client_conn] = conn
+                hd.update_entry(username)
             else:
                 build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "user already logged in")
         else:
@@ -218,12 +210,25 @@ def handle_login_message(conn, data):
         build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "user name doesnt exist")
 
 
+def handle_registration_message(conn, data):
+    data = chatlib.split_data(data, 3)
+    if not data:
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], "please send username, password and email account")
+    try:
+        hd.insert_new_user(data[0], data[1], data[2])
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["account_created_msg"], "")
+    except Exception as e:
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], e)
+
+
 def handle_client_message(conn, cmd, data):
     global OPPONENT_QUIT_DURING_TURN
     client_conn = conn.getpeername()
     if client_conn not in list(LOGGED_USERS_NAMES.keys()):
         if cmd == chatlib.PROTOCOL_CLIENT["login_msg"]:
             handle_login_message(conn, data)
+        elif cmd == chatlib.PROTOCOL_CLIENT["first_login_msg"]:
+            handle_registration_message(conn, data)
         else:
             build_and_send_message(conn, ERROR_MSG, "first log in")
     elif cmd == chatlib.PROTOCOL_CLIENT["my_move_msg"]:
@@ -262,10 +267,8 @@ def print_client_sockets():
 
 
 def main():
-    global USERS
     global MESSAGES_TO_SEND
     print("Welcome to chess Server!")
-    USERS = load_user_database()
     server_socket = setup_socket()
     print("listening for clients...")
     client_sockets = []

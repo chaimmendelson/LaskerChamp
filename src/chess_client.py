@@ -151,16 +151,31 @@ def error_and_exit(error_msg):
     exit()
 
 
+def first_login(conn):
+    while True:
+        username = input("Please enter new username: ")
+        password = input("please enter new password: ")
+        email = input("please enter your email: ")
+        build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["first_login_msg"], chatlib.join_data([username, password, email]))
+        cmd, data = recv_message_and_parse(conn)
+        if cmd == chatlib.PROTOCOL_SERVER["account_created_msg"]:
+            print("account created")
+            login(conn)
+            break
+        elif cmd == chatlib.PROTOCOL_SERVER["invalid_data_msg"]:
+            print(data)
+
+
 def login(conn):
-    username = input("Please enter username: ")
-    password = input("please enter password: ")
-    build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["login_msg"], chatlib.join_data([username, password]))
-    cmd, data = recv_message_and_parse(conn)
-    if cmd == chatlib.PROTOCOL_SERVER["login_ok_msg"]:
-        print("logged in")
-        return
-    print(data)
-    login(conn)
+    while True:
+        username = input("Please enter username: ")
+        password = input("please enter password: ")
+        build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["login_msg"], chatlib.join_data([username, password]))
+        cmd, data = recv_message_and_parse(conn)
+        if cmd == chatlib.PROTOCOL_SERVER["login_ok_msg"]:
+            print("logged in")
+            break
+        print(data)
 
 
 def logout(conn):
@@ -171,7 +186,13 @@ def logout(conn):
 
 def main():
     conn = connect()
-    login(conn)
+    has_acc = ""
+    while has_acc not in ['n', 'y', 'N', 'Y']:
+        has_acc = input("do you have an account? (y/n): ")
+    if has_acc.lower() == 'y':
+        login(conn)
+    else:
+        first_login(conn)
     while True:
         print("p        play PvP game\n"
               "e        play PvE game\n"
