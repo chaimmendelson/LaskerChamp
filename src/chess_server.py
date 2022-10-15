@@ -1,6 +1,8 @@
 ##############################################################################
 #                                server.py                                   #
 ##############################################################################
+import os
+import platform
 import socket
 import threading
 
@@ -280,6 +282,8 @@ def print_client_sockets():
 
 def main():
     global MESSAGES_TO_SEND
+    if platform.uname().system == "Linux":
+        os.system("sudo service postgresql start")
     print("Welcome to chess Server!")
     hd.db.reset_table()
     server_socket = setup_socket()
