@@ -1,27 +1,9 @@
+import platform
 import re
 
 import psycopg2 as pg2
 import requests
 
-
-class InvalidUserData(Exception):
-    pass
-
-
-class InvalidUserName(Exception):
-    pass
-
-
-class TooFewArguments(Exception):
-    pass
-
-
-class TooManyArguments(Exception):
-    pass
-
-
-class InvalidColumn(Exception):
-    pass
 
 TABLE_NAME = 'accounts'
 
@@ -29,6 +11,7 @@ USERNAME = 'username'
 PASSWORD = 'password_hash'
 EMAIL = 'email_address'
 ELO = 'elo'
+GAMES_PLAYED = 'games_played'
 LAST_ENTRY = 'last_entry'
 CREATION_DATE = 'creation_date'
 
@@ -37,33 +20,52 @@ C_LEN = 'len'
 C_CONSTRAINS = 'constrains'
 
 COLUMNS = {
-    USERNAME: {C_TYPE: 'string', C_LEN: 20, C_CONSTRAINS: 'unique not null primary key'},
-    PASSWORD: {C_TYPE: 'string', C_LEN: 40, C_CONSTRAINS: 'not null'},
-    EMAIL: {C_TYPE: 'email', C_LEN: None, C_CONSTRAINS: 'unique not null'},
-    ELO: {C_TYPE: 'number', C_LEN: None, C_CONSTRAINS: 'not null'},
-    LAST_ENTRY: {C_TYPE: 'timestamp', C_LEN: None, C_CONSTRAINS: ''},
-    CREATION_DATE: {C_TYPE: 'timestamp', C_LEN: None, C_CONSTRAINS: ''}
+    USERNAME:       {C_TYPE: 'string',      C_LEN: 32,   C_CONSTRAINS: 'unique not null primary key'},
+    PASSWORD:       {C_TYPE: 'string',      C_LEN: 40,   C_CONSTRAINS: 'not null'},
+    EMAIL:          {C_TYPE: 'email',       C_LEN: None, C_CONSTRAINS: 'unique not null'},
+    ELO:            {C_TYPE: 'number',      C_LEN: None, C_CONSTRAINS: 'not null'},
+    GAMES_PLAYED:   {C_TYPE: 'number',      C_LEN: None, C_CONSTRAINS: 'not null'},
+    LAST_ENTRY:     {C_TYPE: 'timestamp',   C_LEN: None, C_CONSTRAINS: 'not null'},
+    CREATION_DATE:  {C_TYPE: 'timestamp',   C_LEN: None, C_CONSTRAINS: 'not null'}
 }
 
-MANUALLY_MUTABLE_COLUMNS = [USERNAME, PASSWORD, EMAIL, ELO]
+MANUALLY_MUTABLE_COLUMNS = [USERNAME, PASSWORD, EMAIL, ELO, GAMES_PLAYED]
 COLUMNS_L = list(COLUMNS)
+
+ERROR = 0
+COMPLETE = 1
+VALID = 1
+ARGUMENTS_ERROR = 2
+INVALID_COLUMN_ERROR = 3
+INVALID_VALUE_ERROR = 4
+ALREADY_EXISTS_ERROR = 5
 
 
 def get_len(column):
-    return COLUMNS[column][C_LEN]
+    if column in COLUMNS:
+        return COLUMNS[column][C_LEN]
+    return None
 
 
 def get_type(column):
-    return COLUMNS[column][C_TYPE]
+    if column in COLUMNS:
+        return COLUMNS[column][C_TYPE]
+    return None
 
 
 def get_constrains(column):
-    return COLUMNS[column][C_CONSTRAINS]
+    if column in COLUMNS:
+        return COLUMNS[column][C_CONSTRAINS]
+    return None
 
 
 def execute(code, fetchall=False, fetchmany=False, amount=1):
     data = ""
-    connection = pg2.connect(database='chess_users', user='postgres', password=132005)
+    if platform.uname().system == 'Windows':
+        connection = pg2.connect(database='chess_users', user='postgres', password=132005)
+    else:
+        connect_str = "dbname='chess_users' user='lasker' host='localhost' password='132005'"
+        connection = pg2.connect(connect_str)
     cursor = connection.cursor()
     cursor.execute(code)
     if fetchall:
@@ -97,56 +99,49 @@ def reset_table():
 
 
 def is_value_in_column(column, value):
-    validate_column(column)
-    return execute(f"select * from {TABLE_NAME} where {column} = '{value}';", fetchmany=True) != []
-
-
-def validate_user_name(username):
-    if not is_value_in_column(USERNAME, username):
-        raise InvalidUserName("user name doesnt exists")
-
-
-def validate_column(column):
-    if column not in COLUMNS_L:
-        raise InvalidColumn(f"column {column} does not exists in {TABLE_NAME}")
+    if column in COLUMNS:
+        return execute(f"select * from {TABLE_NAME} where {column} = '{value}';", fetchmany=True) != []
+    return False
 
 
 def delete_user(username):
-    validate_user_name(username)
-    execute(f"delete from {TABLE_NAME} where {USERNAME} = '{username}';")
+    if is_value_in_column(USERNAME, username):
+        execute(f"delete from {TABLE_NAME} where {USERNAME} = '{username}';")
+        return COMPLETE
+    return INVALID_VALUE_ERROR
 
 
 def check_value(column, value):
+    if column not in COLUMNS:
+        return INVALID_COLUMN_ERROR
     if get_type(column) == 'string':
         if type(value) != str:
-            raise InvalidUserData(f"{column} must be string")
+            return INVALID_VALUE_ERROR
     if get_type(column) == 'number':
         if not value.isnumeric() or type(value) != str:
-            raise InvalidUserData(f"{column} must be numeric string")
+            return INVALID_VALUE_ERROR
     if get_len(column):
-        if len(str(value)) > get_len(column):
-            raise InvalidUserData(f"{column} length must be less then {get_len(column)} digits")
-    if len(str(value)) == 0:
+        if len(value) > get_len(column):
+            return INVALID_VALUE_ERROR
+    if not value:
         if 'not null' in get_constrains(column):
-            raise InvalidUserData(f"{column} cant be null")
+            return INVALID_VALUE_ERROR
     if 'unique' in get_constrains(column):
         if is_value_in_column(column, value):
-            raise InvalidUserData(f"the {column} ({value}) already exists")
-    if column == ELO:
-        if int(value) > 3000 or int(value) < 0:
-            raise InvalidUserData(f"elo cant exceed 3000 or be less then 0")
+            return ALREADY_EXISTS_ERROR
     if get_type(column) == 'email':
-        if not validate_email(value):
-            raise InvalidUserData(f"invalid email")
+        if not is_email_valid(value):
+            return INVALID_VALUE_ERROR
+    return VALID
 
 
 def insert_new_user(user_data):
-    if len(user_data) < len(MANUALLY_MUTABLE_COLUMNS):
-        raise TooFewArguments()
-    if len(user_data) > len(MANUALLY_MUTABLE_COLUMNS):
-        raise TooManyArguments()
+    if len(user_data) > len(MANUALLY_MUTABLE_COLUMNS) or len(user_data) < len(MANUALLY_MUTABLE_COLUMNS):
+        return ARGUMENTS_ERROR
     for column, value in dict(zip(MANUALLY_MUTABLE_COLUMNS, user_data)).items():
-        check_value(column, value)
+        status = check_value(column, value)
+        if status != VALID:
+            return status, column
     temp = []
     x = 0
     for column in COLUMNS_L:
@@ -156,6 +151,7 @@ def insert_new_user(user_data):
             temp.append(f"'{user_data[x]}'")
             x += 1
     execute(f"insert into {TABLE_NAME}({', '.join(list(COLUMNS))}) values({', '.join(temp)});")
+    return COMPLETE, None
 
 
 def get_all_users():
@@ -179,47 +175,47 @@ def printable_table(table):
     data = ""
     for line in table:
         data += ' | '.join(line) + '\n'
-    return data
+    return data[:-1]
 
 
-def validate_email(email):
-    email_regex = r'^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{0,253}\.[A-Z|a-z]{2,4}$'
-    try:
-        if re.fullmatch(email_regex, email):
+def is_email_valid(email):
+    email_regex = r'^[\w.%+-]{1,64}@[A-Za-z\d.-]{1,253}\.[A-Z|a-z]{2,4}$'
+    if re.fullmatch(email_regex, email):
+        try:
             response = requests.get("https://isitarealemail.com/api/email/validate", params={'email': email})
             status = response.json()['status']
             return status == "valid"
-        return False
-    except:
-        return re.fullmatch(email_regex, email)
+        except:
+            return True
+    return False
 
 
 def get_value(username, column):
-    validate_user_name(username)
-    validate_column(column)
-    data = execute(f"select {column} from {TABLE_NAME} where {USERNAME} = '{username}';", fetchmany=True)
-    return data[0][0]
+    if is_value_in_column(USERNAME, username) and column in COLUMNS:
+        data = execute(f"select {column} from {TABLE_NAME} where {USERNAME} = '{username}';", fetchmany=True)
+        return data[0][0]
+    return None
 
 
 def update_value(username, column, new_value):
-    validate_user_name(username)
-    validate_column(column)
-    if column not in MANUALLY_MUTABLE_COLUMNS:
-        raise InvalidColumn(f"column {column} cant be set manually")
-    check_value(column, new_value)
-    execute(f"update {TABLE_NAME} set {column} = '{new_value}'  where {USERNAME} = '{username}';")
+    if column in MANUALLY_MUTABLE_COLUMNS:
+        if is_value_in_column(USERNAME, username):
+            if check_value(column, new_value):
+                execute(f"update {TABLE_NAME} set {column} = '{new_value}'  where {USERNAME} = '{username}';")
+                return COMPLETE
+        return INVALID_VALUE_ERROR
+    return INVALID_COLUMN_ERROR
 
 
 def update_entry(username):
-    validate_user_name(username)
-    execute(f"update {TABLE_NAME} set {LAST_ENTRY} = current_timestamp  where {USERNAME} = '{username}';")
+    if is_value_in_column(USERNAME, username):
+        execute(f"update {TABLE_NAME} set {LAST_ENTRY} = current_timestamp  where {USERNAME} = '{username}';")
+        return True
+    return INVALID_VALUE_ERROR
 
 
 def main():
-    try:
-        raise InvalidUserData("invalid email")
-    except Exception as e:
-        print(e)
+    reset_table()
 
 
 if __name__ == '__main__':

@@ -3,8 +3,6 @@ import chess.engine
 import chess
 import platform
 from random import shuffle
-
-import psycopg2 as psycopg2
 from stockfish import Stockfish
 import threading
 if platform.uname().system == 'Windows':
@@ -210,9 +208,7 @@ def commit_engine_move(player):
 
 def get_engine_move(player):
     update_status(player)
-    t = threading.Thread(target=commit_engine_move, args=(player, ))
-    t.start()
-    return t
+    threading.Thread(target=commit_engine_move, args=(player, )).start()
 
 
 def update_status(player):

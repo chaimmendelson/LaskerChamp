@@ -25,6 +25,7 @@ PROTOCOL_CLIENT = {
 PROTOCOL_SERVER = {
     "login_ok_msg": "LOGIN_OK",
     "account_created_msg": "CREATED",
+    "server_pending": "PENDING",
     "invalid_data_msg": "INVALID_DATA",
     "login_failed_msg": "ERROR",
     "logged_users": "LOGGED_USERS",
@@ -39,6 +40,7 @@ PROTOCOL_SERVER = {
     "game_over_msg": "GAME_OVER",
     "get_rating_msg": "YOUR_RATING",
     "logged_users_msg": "LOGGED_USERS_NAMES",
+
     "you_won": "you won",
     "you_lost": 'you lost',
     "tie": 'tie'

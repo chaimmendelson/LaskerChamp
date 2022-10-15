@@ -2,6 +2,8 @@
 #                                server.py                                   #
 ##############################################################################
 import socket
+import threading
+
 import chess_chatlib as chatlib
 import select
 import traceback
@@ -19,13 +21,11 @@ LOGGED_USERS_CONN = {}
 LOGGED_USERS_NAMES = {}  # a dictionary of client hostnames to usernames
 WAITING_ROOM = []
 OPPONENT_QUIT_DURING_TURN = []
+CREATION_THREAD = []
 ERROR_MSG = "Error!"
 SERVER_PORT = 5678
 SERVER_IP = "0.0.0.0"
 MAX_MSG_SIZE = 1024
-
-
-# HELPER SOCKET METHODS
 
 
 def build_and_send_message(conn, code, data):
@@ -107,14 +107,21 @@ def check_waiting_room():
 
 def handle_move_message(conn, data):
     player = conn.getpeername()
-    state, msg = chess_rooms.commit_move(player, data)
-    if not state:
-        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_move_msg'], data)
-    elif chess_rooms.is_game_over(player):
-        handle_game_over(player)
+    if not chess_rooms.is_in_room(player):
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['not_in_room_msg'], '')
+    elif chess_rooms.did_opponent_quit(player):
+        chess_rooms.update_status(player)
+        update_quiting_status(player)
+        return
     else:
-        data = chatlib.join_data([data, chess_rooms.get_fen(player)])
-        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['your_move_msg'], data)
+        state, msg = chess_rooms.commit_move(player, data)
+        if not state:
+            build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_move_msg'], data)
+        elif chess_rooms.is_game_over(player):
+            handle_game_over(player)
+        else:
+            data = chatlib.join_data([data, chess_rooms.get_fen(player)])
+            build_and_send_message(conn, chatlib.PROTOCOL_SERVER['your_move_msg'], data)
 
 
 def send_game_over_msg(player):
@@ -191,11 +198,11 @@ def handle_login_message(conn, data):
     global LOGGED_USERS_NAMES, LOGGED_USERS_CONN
     data = chatlib.split_data(data, 2)
     if not data:
-        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "too many or too less values")
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "invalid value count")
         return
     username, password = data
     if hd.does_username_exist(username):
-        if hd.validate_password(username, password):
+        if hd.check_password(username, password):
             if username not in LOGGED_USERS_NAMES.values():
                 build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_ok_msg"], "")
                 client_conn = conn.getpeername()
@@ -210,21 +217,33 @@ def handle_login_message(conn, data):
         build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "user name doesnt exist")
 
 
+def registration_thread(conn, data):
+    global CREATION_THREAD
+    status = hd.create_new_user(data[0], data[1], data[2])
+    if status == "account created":
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["account_created_msg"], "")
+    else:
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], status)
+    CREATION_THREAD.remove(conn.getpeername())
+
+
 def handle_registration_message(conn, data):
+    global CREATION_THREAD
     data = chatlib.split_data(data, 3)
     if not data:
-        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], "please send username, password and email account")
-    try:
-        hd.insert_new_user(data[0], data[1], data[2])
-        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["account_created_msg"], "")
-    except Exception as e:
-        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], e)
+        msg = "please send username, password and email account"
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], msg)
+        return
+    CREATION_THREAD.append(conn.getpeername())
+    threading.Thread(target=registration_thread, args=(conn, data, )).start()
 
 
 def handle_client_message(conn, cmd, data):
     global OPPONENT_QUIT_DURING_TURN
     client_conn = conn.getpeername()
     if client_conn not in list(LOGGED_USERS_NAMES.keys()):
+        if client_conn in CREATION_THREAD:
+            build_and_send_message(conn, chatlib.PROTOCOL_SERVER["server_pending"], "creating account")
         if cmd == chatlib.PROTOCOL_CLIENT["login_msg"]:
             handle_login_message(conn, data)
         elif cmd == chatlib.PROTOCOL_CLIENT["first_login_msg"]:
@@ -232,14 +251,7 @@ def handle_client_message(conn, cmd, data):
         else:
             build_and_send_message(conn, ERROR_MSG, "first log in")
     elif cmd == chatlib.PROTOCOL_CLIENT["my_move_msg"]:
-        if chess_rooms.is_in_room(client_conn):
-            if chess_rooms.did_opponent_quit(client_conn):
-                chess_rooms.update_status(client_conn)
-                update_quiting_status(client_conn)
-            else:
-                handle_move_message(conn, data)
-        else:
-            build_and_send_message(conn, chatlib.PROTOCOL_SERVER['not_in_room_msg'], '')
+        handle_move_message(conn, data)
     elif cmd == chatlib.PROTOCOL_CLIENT["get_my_rating"]:
         handle_get_rating_message(conn, LOGGED_USERS_NAMES[client_conn])
     elif cmd == chatlib.PROTOCOL_CLIENT["multiplayer"]:
@@ -263,12 +275,13 @@ def handle_logged_message(conn):
 def print_client_sockets():
     logged_list = list(LOGGED_USERS_NAMES.keys())
     for c in logged_list:
-        print("{}\t".format(c))
+        print(f"{c}\t")
 
 
 def main():
     global MESSAGES_TO_SEND
     print("Welcome to chess Server!")
+    hd.db.reset_table()
     server_socket = setup_socket()
     print("listening for clients...")
     client_sockets = []
