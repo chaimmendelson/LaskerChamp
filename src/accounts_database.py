@@ -1,7 +1,5 @@
-import platform
 import re
-
-import psycopg2 as pg2
+import os_values
 import requests
 
 
@@ -61,11 +59,7 @@ def get_constrains(column):
 
 def execute(code, fetchall=False, fetchmany=False, amount=1):
     data = ""
-    if platform.uname().system == 'Windows':
-        connection = pg2.connect(database='chess_users', user='postgres', password=132005)
-    else:
-        connect_str = "dbname='chess_users' user='lasker' host='localhost' password='132005'"
-        connection = pg2.connect(connect_str)
+    connection = os_values.get_database_conn()
     cursor = connection.cursor()
     cursor.execute(code)
     if fetchall:

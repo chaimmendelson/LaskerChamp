@@ -1,14 +1,12 @@
 import re
 import chess.engine
 import chess
-import platform
 from random import shuffle
 from stockfish import Stockfish
 import threading
-if platform.uname().system == 'Windows':
-    STOCKFISH_PATH = r"C:\Users\chaim\OneDrive\Desktop\python\stockfish_15_win_x64_avx2\stockfish_15_x64_avx2.exe"
-else:
-    STOCKFISH_PATH = r"/usr/local/bin/stockfish"
+
+import os_values
+
 START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
 pieces = {
@@ -197,7 +195,7 @@ def close_room(player) -> None:
 
 def commit_engine_move(player):
     global ANSWERED
-    stockfish = Stockfish(STOCKFISH_PATH)
+    stockfish = Stockfish(os_values.get_stockfish_path())
     room = _get_room(player)
     fen = str(_get_room(player))
     stockfish.set_skill_level(room.level)
@@ -247,7 +245,6 @@ def test():
             break
     print_board(room.board.fen())
     print(room.board.result())"""
-
 
 
 def main():

@@ -17,6 +17,8 @@ import re
 import handle_database as hd
 
 # GLOBALS
+import os_values
+
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 MESSAGES_TO_SEND = []
 LOGGED_USERS_CONN = {}
@@ -282,11 +284,10 @@ def print_client_sockets():
 
 def main():
     global MESSAGES_TO_SEND
-    if platform.uname().system == "Linux":
-        os.system("sudo service postgresql start")
     print("Welcome to chess Server!")
-    hd.db.reset_table()
     server_socket = setup_socket()
+    os_values.set_user()
+    hd.db.reset_table()
     print("listening for clients...")
     client_sockets = []
     try:
