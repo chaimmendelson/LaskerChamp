@@ -51,7 +51,7 @@ def build_and_send_message(conn, code, data):
 def recv_message_and_parse(conn):
     full_msg = conn.recv(MAX_MSG_SIZE).decode()
     cmd, data = chatlib.parse_message(full_msg)
-    print("[CLIENT] ", full_msg)
+    print(f"[{get_username(conn)} -> ] ", full_msg)
     return cmd, data
 
 
@@ -340,7 +340,6 @@ def main():
                     print("new client joined!", client_address)
                     client_sockets.append(client_socket)
                 else:
-                    print("new data from client")
                     try:
                         cmd, data = recv_message_and_parse(current_socket)
                     except ConnectionResetError:
@@ -357,7 +356,7 @@ def main():
             for message in MESSAGES_TO_SEND:
                 c, data = message
                 if c in ready_to_write:
-                    print(f"[SERVER]  {data}")
+                    print(f"[-> {get_username(c)}]  {data}")
                     c.send(data.encode())
                     MESSAGES_TO_SEND.remove(message)
     except:
