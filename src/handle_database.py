@@ -87,6 +87,14 @@ def get_elo(username):
     return db.get_value(username, db.ELO)
 
 
+def update_games_played(username, add):
+    return db.update_value(username, db.GAMES_PLAYED, get_games_played(username) + add)
+
+
+def get_games_played(username):
+    return db.get_value(username, db.GAMES_PLAYED)
+
+
 def update_entry(username):
     return db.update_entry(username)
 
@@ -122,7 +130,6 @@ def test():
     stop = timeit.default_timer()
     print('Time: ', stop - start)
     print(db.printable_table(db.get_all_users()))"""
-
 
 if __name__ == '__main__':
     test()

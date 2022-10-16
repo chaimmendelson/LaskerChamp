@@ -44,3 +44,20 @@ def get_database_conn():
     else:
         connect_str = "dbname='chess_users' user='lasker' host='localhost' password='132005'"
         return pg2.connect(connect_str)
+
+
+def update_elo_tester():
+    """
+    RatA + K * (score - (1 / (1 + 10(RatB - RatA)/400)))
+    K = 400/(games_played**1.5) + 16
+    """
+    p_elo = 1500
+    o_elo = 1500
+    p_K = 400 / 1 + 16
+    o_K = 400 / 1 + 16
+    p_score = 1
+    o_score = 0
+    p_new_elo = p_elo + p_K * (p_score - (1 / (1 + 10 ** ((o_elo - p_elo) / 400))))
+    o_new_elo = o_elo + o_K * (o_score - (1 / (1 + 10 ** ((p_elo - o_elo) / 400))))
+    print(p_new_elo)
+    print(o_new_elo)

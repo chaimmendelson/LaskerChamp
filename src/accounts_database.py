@@ -21,7 +21,7 @@ COLUMNS = {
     USERNAME:       {C_TYPE: 'string',      C_LEN: 32,   C_CONSTRAINS: 'unique not null primary key'},
     PASSWORD:       {C_TYPE: 'string',      C_LEN: 40,   C_CONSTRAINS: 'not null'},
     EMAIL:          {C_TYPE: 'email',       C_LEN: None, C_CONSTRAINS: 'unique not null'},
-    ELO:            {C_TYPE: 'number',      C_LEN: None, C_CONSTRAINS: 'not null'},
+    ELO:            {C_TYPE: 'decimal',     C_LEN: None, C_CONSTRAINS: 'not null'},
     GAMES_PLAYED:   {C_TYPE: 'number',      C_LEN: None, C_CONSTRAINS: 'not null'},
     LAST_ENTRY:     {C_TYPE: 'timestamp',   C_LEN: None, C_CONSTRAINS: 'not null'},
     CREATION_DATE:  {C_TYPE: 'timestamp',   C_LEN: None, C_CONSTRAINS: 'not null'}
@@ -73,7 +73,7 @@ def execute(code, fetchall=False, fetchmany=False, amount=1):
 
 def create_table():
     c_type_dict = {'number': 'integer', 'string': 'varchar', 'serial': 'serial',
-                   'email': 'text', 'timestamp': 'timestamp'}
+                   'email': 'text', 'timestamp': 'timestamp', 'decimal': 'decimal'}
     columns = ""
     for column in COLUMNS:
         columns += f"{column} {c_type_dict[get_type(column)]} "
@@ -108,11 +108,15 @@ def delete_user(username):
 def check_value(column, value):
     if column not in COLUMNS:
         return INVALID_COLUMN_ERROR
-    if get_type(column) == 'string':
-        if type(value) != str:
-            return INVALID_VALUE_ERROR
+    if type(value) != str:
+        return INVALID_VALUE_ERROR
     if get_type(column) == 'number':
-        if not value.isnumeric() or type(value) != str:
+        if not value.isdecimal():
+            return INVALID_VALUE_ERROR
+    if get_type(column) == 'decimal':
+        try:
+            float(value)
+        except ValueError:
             return INVALID_VALUE_ERROR
     if get_len(column):
         if len(value) > get_len(column):
@@ -209,7 +213,7 @@ def update_entry(username):
 
 
 def main():
-    reset_table()
+    print(printable_table(get_all_users()))
 
 
 if __name__ == '__main__':

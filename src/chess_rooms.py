@@ -61,7 +61,7 @@ class ChessRoom:
         shuffle(self.players)
         self.board = chess.Board(fen)
         self.opponent_left_match = False
-        self.who_quit = self.players[0]
+        self.who_quit = None
         self.turn = self.players[0]
         self.waiting = False
         self.level = engine_level
