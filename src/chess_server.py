@@ -308,7 +308,7 @@ def handle_client_message(conn, cmd, data):
 
 
 def handle_logged_message(user):
-    conn_list = list(LOGGED_USERS_NAMES.values())
+    conn_list = list(LOGGED_USERS_CONN)
     logged = chatlib.join_data(conn_list)
     if len(logged) > 1:
         chatlib.join_data(logged)
