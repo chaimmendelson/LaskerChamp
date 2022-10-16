@@ -17,7 +17,7 @@ def set_user():
         user = input("enter num: ")
         if user.isnumeric():
             user = int(user)
-            if user < len(USERS_l) - 1:
+            if user < len(USERS_l):
                 break
     USER = USERS_l[user]
     if uname().system == "Linux":
