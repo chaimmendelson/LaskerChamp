@@ -1,9 +1,9 @@
 import socket
 import chess_chatlib as chatlib
+import os_values
 import re
 
 SERVER_IP = "127.0.0.1"
-# 34.125.51.194
 SERVER_PORT = 5678
 
 # HELPER SOCKET METHODS
@@ -63,18 +63,26 @@ def fen_to_full_board(fen_board) -> list:
     return fen_board
 
 
-def print_board(fen):
+def print_board(fen, color):
     between = 2 * ' ' + '|' + ' '
     line = 3 * ' ' + '+' + '----+'*8
+    columns = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    rows = ['8', '7', '6', '5', '4', '3', '2', '1']
     board = fen_to_full_board(fen.split()[0])
+    if color == 'black':
+        columns.reverse()
+        rows.reverse()
+        board.reverse()
+        for i in range(len(board)):
+            board[i].reverse()
     print(line)
     for i in range(8):
         for j in range(len(board[i])):
             board[i][j] = pieces[board[i][j]]
-        board[i].insert(0, str(8 - i))
+        board[i].insert(0, rows[i])
         print(between.join(board[i]) + between)
         print(line)
-    print(' '*5 + (' '*4).join(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']))
+    print(' '*5 + (' '*4).join(columns))
 
 
 def get_rating(conn):
@@ -96,6 +104,25 @@ def get_level_choice():
     return level
 
 
+def get_move_and_send(conn):
+    while True:
+        move = input('enter move: ')
+        if move == 'q':
+            x = input('do you really want to quit game? (y/n): ')
+            while x not in ['y', 'n']:
+                x = input('do you really want to quit game? (y/n): ')
+            if x == 'n':
+                get_move_and_send(conn)
+            else:
+                build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["quit_game_msg"], '')
+                print("you have quited the game")
+                return 'quit'
+        elif re.fullmatch(r'^[a-h][1-8][a-h][1-8][q,r,b,n]?$', move):
+            break
+    build_and_send_message(conn, chatlib.PROTOCOL_CLIENT['my_move_msg'], move)
+    return 'sent'
+
+
 def play_game(conn, pvp=True):
     if pvp:
         msg = chatlib.PROTOCOL_CLIENT["multiplayer"]
@@ -109,38 +136,40 @@ def play_game(conn, pvp=True):
         return
     color, fen = data.split(chatlib.DATA_DELIMITER)
     if color == 'white':
-        print_board(fen)
-        move = input('enter move: ')
-        build_and_send_message(conn, chatlib.PROTOCOL_CLIENT['my_move_msg'], move)
+        print_board(fen, color)
+        if get_move_and_send(conn) == 'quit':
+            return
     else:
-        print_board(fen)
+        print_board(fen, color)
         print("waiting for opponent move")
     while True:
         msg_code, data = recv_message_and_parse(conn)
         if msg_code == chatlib.PROTOCOL_SERVER['opponent_move_msg']:
             move, fen = chatlib.split_data(data, 2)
-            print_board(fen)
+            print_board(fen, color)
             print(f"opponent move was {move}")
-            move = input('enter move: ')
-            build_and_send_message(conn, chatlib.PROTOCOL_CLIENT['my_move_msg'], move)
+            if get_move_and_send(conn) == 'quit':
+                break
         elif msg_code == chatlib.PROTOCOL_SERVER['your_move_msg']:
             move, fen = data.split(chatlib.DATA_DELIMITER, 2)
-            print_board(fen)
+            print_board(fen, color)
             print("waiting for opponent move")
         elif msg_code == chatlib.PROTOCOL_SERVER['invalid_move_msg']:
-            move = input('enter valid move: ')
-            build_and_send_message(conn, chatlib.PROTOCOL_CLIENT['my_move_msg'], move)
+            if get_move_and_send(conn) == 'quit':
+                break
         elif msg_code == chatlib.PROTOCOL_SERVER['opponent_quit_msg']:
             print('your opponent has quit the game')
             break
         elif msg_code == chatlib.PROTOCOL_SERVER['game_over_msg']:
             result, move, fen = data.split(chatlib.DATA_DELIMITER, 3)
-            print_board(fen)
+            print_board(fen, color)
             print(f"{result}")
             break
 
 
 def connect():
+    global SERVER_IP
+    SERVER_IP = os_values.set_server_ip()
     the_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     the_socket.connect((SERVER_IP, SERVER_PORT))
     return the_socket
@@ -194,8 +223,8 @@ def main():
     else:
         first_login(conn)
     while True:
-        print("p        play PvP game\n"
-              "e        play PvE game\n"
+        print("p        Play PvP game\n"
+              "e        Play PvE game\n"
               "s        Get my rating\n"
               "l        Get logged users list\n"
               "q        Quit\n")

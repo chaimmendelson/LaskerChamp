@@ -1,8 +1,6 @@
 ##############################################################################
 #                                server.py                                   #
 ##############################################################################
-import os
-import platform
 import socket
 import threading
 
@@ -22,7 +20,7 @@ import os_values
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 MESSAGES_TO_SEND = []
 LOGGED_USERS_CONN = {}
-WAITING_ROOM = []
+WAITING_ROOM ={}
 OPPONENT_QUIT_DURING_TURN = []
 CREATION_THREAD = []
 ERROR_MSG = "Error!"
@@ -42,6 +40,18 @@ def get_conn(username):
     return LOGGED_USERS_CONN[username]
 
 
+def print_log(conn, msg, from_client=True):
+    spaces = 15
+    if conn in LOGGED_USERS_CONN.values():
+        player = get_username(conn)
+    else:
+        player = conn.getpeername()[0]
+    text = 'sending to'
+    if from_client:
+        text = 'sent from '
+    print(f"{text} [{player}]: {' '*(spaces - len(player))}{msg}")
+
+
 def build_and_send_message(conn, code, data):
     global MESSAGES_TO_SEND
     msg = chatlib.build_message(code, data)
@@ -51,7 +61,7 @@ def build_and_send_message(conn, code, data):
 def recv_message_and_parse(conn):
     full_msg = conn.recv(MAX_MSG_SIZE).decode()
     cmd, data = chatlib.parse_message(full_msg)
-    print(f"[{get_username(conn)} -> ] ", full_msg)
+    print_log(conn, full_msg)
     return cmd, data
 
 
@@ -80,9 +90,9 @@ def handle_get_rating_message(username):
 def handle_pvp_request_message(username):
     global WAITING_ROOM
     if WAITING_ROOM:
-        opponent = WAITING_ROOM[0][0]
+        opponent = list(WAITING_ROOM.keys())[0]
         chess_rooms.add_room(username, opponent)
-        WAITING_ROOM.remove(WAITING_ROOM[0])
+        del WAITING_ROOM[opponent]
         w_player = chess_rooms.get_white_player(username)
         msg = chatlib.PROTOCOL_SERVER["game_started_msg"]
         build_and_send_message(get_conn(w_player), msg, chatlib.join_data(['white', START_FEN]))
@@ -90,7 +100,7 @@ def handle_pvp_request_message(username):
         hd.update_games_played(username, 1)
         hd.update_games_played(opponent, 1)
     else:
-        WAITING_ROOM.append([username, datetime.now()])
+        WAITING_ROOM[username] = datetime.now()
 
 
 def handle_pve_request_message(username, level):
@@ -109,15 +119,13 @@ def handle_pve_request_message(username, level):
 
 def check_waiting_room():
     global WAITING_ROOM
-    temp_waiting_room = []
-    for i in range(len(WAITING_ROOM)):
+    waiting_users = list(WAITING_ROOM.keys())
+    for user in waiting_users:
         now = datetime.now()
-        difference = now - WAITING_ROOM[i][1]
+        difference = now - WAITING_ROOM[user]
         if difference.seconds > 60:
-            build_and_send_message(get_conn(WAITING_ROOM[i][0]), chatlib.PROTOCOL_SERVER["no_opponent_found_msg"], '')
-        else:
-            temp_waiting_room.append(WAITING_ROOM[i])
-    WAITING_ROOM = temp_waiting_room
+            build_and_send_message(get_conn(user), chatlib.PROTOCOL_SERVER["no_opponent_found_msg"], '')
+            del WAITING_ROOM[user]
 
 
 def handle_move_message(username, data):
@@ -126,7 +134,6 @@ def handle_move_message(username, data):
     elif chess_rooms.did_opponent_quit(username):
         chess_rooms.update_status(username)
         update_quiting_status(username)
-        return
     else:
         state, msg = chess_rooms.commit_move(username, data)
         if not state:
@@ -158,21 +165,17 @@ def handle_game_over(user):
 
 
 def update_quiting_status(user):
-    opponent = chess_rooms.get_opponent(chess_rooms.get_quiting_player(user))
-    if chess_rooms.is_client_turn(opponent) and not chess_rooms.is_waiting(user):
-        return
-    if chess_rooms.is_pvp_room(user):
-        build_and_send_message(get_conn(opponent), chatlib.PROTOCOL_SERVER['opponent_quit_msg'], '')
-    chess_rooms.close_room(user)
+    if chess_rooms.did_opponent_quit(user) and chess_rooms.is_waiting(user):
+        build_and_send_message(get_conn(user), chatlib.PROTOCOL_SERVER['opponent_quit_msg'], '')
+        chess_rooms.close_room(user)
 
 
 def update_players():
     for user, conn in LOGGED_USERS_CONN.items():
         if chess_rooms.is_in_room(user):
+            update_quiting_status(user)
             if chess_rooms.is_game_over(user):
                 handle_game_over(user)
-            elif chess_rooms.did_opponent_quit(user):
-                update_quiting_status(user)
             elif chess_rooms.is_waiting(user):
                 if chess_rooms.is_client_turn(user):
                     send_opponent_msg(user)
@@ -191,12 +194,14 @@ def handle_quit_msg(user):
     if chess_rooms.did_opponent_quit(user):
         chess_rooms.close_room(user)
     else:
-        chess_rooms.quit_match(user)
         if chess_rooms.is_pvp_room(user):
-            update_elo(user)
+            update_elo(user, False)
+            chess_rooms.quit_match(user)
+        else:
+            chess_rooms.close_room(user)
 
 
-def update_elo(user):
+def update_elo(user, is_game_over=True):
     """
     RatA + K * (score - (1 / (1 + 10(RatB - RatA)/400)))
     K = 400/(games_played**1.5) + 16
@@ -207,13 +212,9 @@ def update_elo(user):
     o_elo = float(hd.get_elo(o_username))
     p_K = 400 / (hd.get_games_played(p_username)) + 16
     o_K = 400 / (hd.get_games_played(o_username)) + 16
-    if chess_rooms.did_opponent_quit(user):
-        if chess_rooms.get_quiting_player(user) == user:
-            p_score = 0
-            o_score = 1
-        else:
-            p_score = 1
-            o_score = 0
+    if not is_game_over:
+        p_score = 0
+        o_score = 1
     else:
         p_score = chess_rooms.get_game_results(user)
         o_score = chess_rooms.get_game_results(chess_rooms.get_opponent(user))
@@ -224,17 +225,17 @@ def update_elo(user):
 
 
 def handle_logout_message(conn):
-    global LOGGED_USERS_NAMES
-    user = get_username(conn)
-    if chess_rooms.is_in_room(user):
-        handle_quit_msg(user)
-    try:
-        del LOGGED_USERS_CONN[user]
-    except:
-        pass
-    finally:
-        conn.close()
-        print("connection closed")
+    global LOGGED_USERS_CONN, WAITING_ROOM
+    user = conn.getpeername()[0]
+    if conn in LOGGED_USERS_CONN.values():
+        user = get_username(conn)
+        if user in list(WAITING_ROOM.keys()):
+            del WAITING_ROOM[user]
+        if chess_rooms.is_in_room(user):
+            handle_quit_msg(user)
+        del LOGGED_USERS_CONN[get_username(conn)]
+    conn.close()
+    print(f"connection to {user} closed")
 
 
 def handle_login_message(conn, data):
@@ -295,6 +296,8 @@ def handle_client_message(conn, cmd, data):
     username = get_username(conn)
     if cmd == chatlib.PROTOCOL_CLIENT["my_move_msg"]:
         handle_move_message(username, data)
+    elif cmd == chatlib.PROTOCOL_CLIENT["quit_game_msg"]:
+        handle_quit_msg(username)
     elif cmd == chatlib.PROTOCOL_CLIENT["get_my_rating"]:
         handle_get_rating_message(username)
     elif cmd == chatlib.PROTOCOL_CLIENT["multiplayer"]:
@@ -326,7 +329,7 @@ def main():
     print("Welcome to chess Server!")
     server_socket = setup_socket()
     os_values.set_user()
-    hd.db.reset_table()
+    hd.reset_table()
     print("listening for clients...")
     client_sockets = []
     try:
@@ -354,10 +357,10 @@ def main():
                         else:
                             handle_client_message(current_socket, cmd, data)
             for message in MESSAGES_TO_SEND:
-                c, data = message
-                if c in ready_to_write:
-                    print(f"[-> {get_username(c)}]  {data}")
-                    c.send(data.encode())
+                conn, data = message
+                if conn in ready_to_write:
+                    print_log(conn, data, from_client=False)
+                    conn.send(data.encode())
                     MESSAGES_TO_SEND.remove(message)
     except:
         conn_list = list(LOGGED_USERS_CONN.values())

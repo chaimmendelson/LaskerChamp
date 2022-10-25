@@ -5,7 +5,7 @@ from datetime import datetime
 
 
 def hash(password):
-    return hashlib.sha1(password.encode()).hexdigest()
+    return hashlib.sha512(password.encode()).hexdigest()
 
 
 def is_username_valid(username):
@@ -31,7 +31,7 @@ def is_email_valid(email):
 def create_new_user(username, password, email):
     if is_username_valid(username):
         if is_password_valid(password):
-            status, column = db.insert_new_user([username, hash(password), email, '1200', '0'])
+            status, column = db.insert_new_user([username, hash(password), email, '1200', '0', db.USER])
             if status == db.VALID:
                 return "account created"
             if status == db.INVALID_VALUE_ERROR:
@@ -43,7 +43,10 @@ def create_new_user(username, password, email):
 
 
 def delete_user(username):
-    db.delete_user(username)
+    if does_username_exist(username):
+        db.delete_user(username)
+        return True
+    return False
 
 
 def check_password(username, password):
@@ -122,6 +125,24 @@ def admin_reset_password(username):
     return False
 
 
+def set_admin(password, username):
+    if does_username_exist(username):
+        if db.get_value(username, db.PERMISSIONS) == db.ADMIN:
+            if check_password('admin', admin_password):
+                if does_username_exist(user_to_set):
+                    pass
+
+
+OWNER_PASSWORD = hashlib.sha384('chaim'.encode()).hexdigest()[34:61]
+
+
+def reset_table():
+    db.reset_table()
+    create_new_user()
+    create_new_user('admin', hashlib.sha384('chaim mendelson 2005')[30:63], 'chaimke2005@gmail.com')
+    create_new_user('test', 'test', 'chaimm2005@gmail.com')
+
+
 def test():
     """delete_user('test')
     create_new_user('test', 'test', 'chaimm2005@gmail.com')
@@ -130,6 +151,6 @@ def test():
     stop = timeit.default_timer()
     print('Time: ', stop - start)
     print(db.printable_table(db.get_all_users()))"""
-
+    print(OWNER_PASSWORD)
 if __name__ == '__main__':
     test()

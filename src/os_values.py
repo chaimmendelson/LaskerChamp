@@ -1,6 +1,10 @@
 import os
+import time
+import timeit
 from platform import uname
 import psycopg2 as pg2
+from concurrent.futures import ThreadPoolExecutor
+
 CHAIM = 'chaim'
 ELCHAI = 'elchai'
 SERVER = 'server'
@@ -28,6 +32,15 @@ def set_user():
         print("database operational")
 
 
+def set_server_ip():
+    choice = input("0 - local\n1 - cloud\nenter location: ")
+    while choice not in ['0', '1']:
+        choice = input("enter location: ")
+    if choice == '0':
+        return "127.0.0.1"
+    return "34.125.51.194"
+
+    
 def get_stockfish_path():
     if uname().system == 'Windows' and USER == CHAIM:
         return r"C:\Users\chaim\OneDrive\Desktop\python\stockfish_15_win_x64_avx2\stockfish_15_x64_avx2.exe"
@@ -61,3 +74,26 @@ def update_elo_tester():
     o_new_elo = o_elo + o_K * (o_score - (1 / (1 + 10 ** ((p_elo - o_elo) / 400))))
     print(p_new_elo)
     print(o_new_elo)
+
+
+def input_thread():
+    time.sleep(2)
+
+
+# from multiprocessing.pool import ThreadPool
+
+
+def main():
+    executor = ThreadPoolExecutor(max_workers=10)
+    start = timeit.default_timer()
+    for i in range(1000):
+        executor.submit(input_thread)
+    a = executor.submit(input_thread)
+    while not a.done():
+        time.sleep(1)
+    stop = timeit.default_timer()
+    print(stop - start)
+
+
+if __name__ == '__main__':
+    main()

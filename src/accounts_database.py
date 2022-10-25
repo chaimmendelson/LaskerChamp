@@ -10,6 +10,7 @@ PASSWORD = 'password_hash'
 EMAIL = 'email_address'
 ELO = 'elo'
 GAMES_PLAYED = 'games_played'
+PERMISSIONS = 'permissions'
 LAST_ENTRY = 'last_entry'
 CREATION_DATE = 'creation_date'
 
@@ -19,15 +20,20 @@ C_CONSTRAINS = 'constrains'
 
 COLUMNS = {
     USERNAME:       {C_TYPE: 'string',      C_LEN: 32,   C_CONSTRAINS: 'unique not null primary key'},
-    PASSWORD:       {C_TYPE: 'string',      C_LEN: 40,   C_CONSTRAINS: 'not null'},
+    PASSWORD:       {C_TYPE: 'string',      C_LEN: 128,  C_CONSTRAINS: 'not null'},
     EMAIL:          {C_TYPE: 'email',       C_LEN: None, C_CONSTRAINS: 'unique not null'},
     ELO:            {C_TYPE: 'decimal',     C_LEN: None, C_CONSTRAINS: 'not null'},
     GAMES_PLAYED:   {C_TYPE: 'number',      C_LEN: None, C_CONSTRAINS: 'not null'},
+    PERMISSIONS:    {C_TYPE: 'string',      C_LEN: 10,   C_CONSTRAINS: 'not null'},
     LAST_ENTRY:     {C_TYPE: 'timestamp',   C_LEN: None, C_CONSTRAINS: 'not null'},
     CREATION_DATE:  {C_TYPE: 'timestamp',   C_LEN: None, C_CONSTRAINS: 'not null'}
 }
 
-MANUALLY_MUTABLE_COLUMNS = [USERNAME, PASSWORD, EMAIL, ELO, GAMES_PLAYED]
+MANUALLY_MUTABLE_COLUMNS = [USERNAME, PASSWORD, EMAIL, ELO, GAMES_PLAYED, PERMISSIONS]
+OWNER = 'owner'
+ADMIN = 'admin'
+USER = 'user'
+PERMISSIONS_LIST = [OWNER, ADMIN, USER]
 COLUMNS_L = list(COLUMNS)
 
 ERROR = 0
@@ -127,6 +133,12 @@ def check_value(column, value):
     if 'unique' in get_constrains(column):
         if is_value_in_column(column, value):
             return ALREADY_EXISTS_ERROR
+    if column == ELO:
+        if not 0 < int(value) < 3500:
+            return INVALID_VALUE_ERROR
+    if column == PERMISSIONS:
+        if value not in PERMISSIONS_LIST:
+            return INVALID_VALUE_ERROR
     if get_type(column) == 'email':
         if not is_email_valid(value):
             return INVALID_VALUE_ERROR

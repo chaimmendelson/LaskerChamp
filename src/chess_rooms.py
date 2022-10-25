@@ -61,7 +61,6 @@ class ChessRoom:
         shuffle(self.players)
         self.board = chess.Board(fen)
         self.opponent_left_match = False
-        self.who_quit = None
         self.turn = self.players[0]
         self.waiting = False
         self.level = engine_level
@@ -90,12 +89,12 @@ CHESS_ROOMS = []
 
 
 def quit_match(player):
-    _get_room(player).opponent_left_match = True
-    _get_room(player).who_quit = player
-
-
-def get_quiting_player(player):
-    return _get_room(player).who_quit
+    room = _get_room(player)
+    room.opponent_left_match = True
+    if room.turn == player:
+        room.turn = get_opponent(player)
+        room.waiting = True
+    room.players.remove(player)
 
 
 def did_opponent_quit(player):
@@ -154,7 +153,7 @@ def get_game_results(player) -> int:
 
 def commit_move(player, move) -> bool:
     regex = r'^[a-h][1-8][a-h][1-8][q,r,b,n]?$'
-    if not re.search(regex, move):
+    if not re.fullmatch(regex, move):
         return False, 'invalid move string'
     room = _get_room(player)
     if not chess.Move.from_uci(move) in room.board.legal_moves:
@@ -185,7 +184,7 @@ def _get_room(player) -> ChessRoom:
     for room in CHESS_ROOMS:
         if player in room.players:
             return room
-    raise ValueError("client is not in a chess room")
+    return None
 
 
 def close_room(player) -> None:
@@ -195,13 +194,16 @@ def close_room(player) -> None:
 
 def commit_engine_move(player):
     global ANSWERED
-    stockfish = Stockfish(os_values.get_stockfish_path())
-    room = _get_room(player)
-    fen = str(_get_room(player))
-    stockfish.set_skill_level(room.level)
-    stockfish.set_fen_position(fen)
-    room.board.push(chess.Move.from_uci(stockfish.get_best_move()))
-    room.update_turn()
+    try:
+        stockfish = Stockfish(os_values.get_stockfish_path())
+        room = _get_room(player)
+        fen = str(_get_room(player))
+        stockfish.set_skill_level(room.level)
+        stockfish.set_fen_position(fen)
+        room.board.push(chess.Move.from_uci(stockfish.get_best_move()))
+        room.update_turn()
+    except:
+        pass
 
 
 def get_engine_move(player):
@@ -218,8 +220,8 @@ def is_waiting(player):
 
 
 def test():
-    end_game_fen = 'R6k/Q7/K7/8/8/8/8/8 b - - 0 0'
-    moves = ['f2f3', 'e7e5', 'g2g4', 'd8h4']
+    # end_game_fen = 'R6k/Q7/K7/8/8/8/8/8 b - - 0 0'
+    # moves = ['f2f3', 'e7e5', 'g2g4', 'd8h4']
     """now = datetime.now()
     for char in ['a', 'b', 'c', 'd', 'e', 'f']:
         add_pve_room(char)
@@ -252,20 +254,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-"""
-רשימה שמכילה את כל מי שמחכה למהלך וברגע שזה תורו סימן שהשני ביצע מהלך, מאוד מקל על הסרדינג ומפחית את העומס קוד סך הכל
-בנתיים הסטוקפיש עובד על שתי המערכות הפעלה שזה אחלה, גם מקל על ההרצה של הקוד
-צריך לברר איך עושים את הסרדינג לפי הסדר כי זה מאוד מוזר שזה פשוט מסיים כל אחד בזמן אחר
-לברר מה שונה בין כל חיבור וחיבור אם זה מתרחש מאותו מחשב ואם יש צורך לעבור לשימוש בשם משמש מה שאוליי קצת יסבך אבל לא בצורה קשה
-לנסות למצוא דרך לעקוף את ההורדה של חומת האש כשצריך להתחבר עם מחשב אחר, אוליי להוריד חלק מסויים?
-להתמודד טוב גם עם התנתקות של השני מהמשחק לגבי משחק עם מנוע, שלא תקרוס התכנית
-להתמודד יותר טוב עם הודעות לא קשורות לדוגמא על הודעה של מהלך כשהוא לא במשחק וכאלה
-אוליי פונקציה שבסוף כל ריצה תבדוק מצב של כל הלוחות? או שפשוט עדיף אחרי כל מהלך ואז בנות פונקציה שתודיע ותסגור את החדר
-לגבי השורה הראשונה אפשר פשוט לקבל את המהלך האחרון שנעשה... לא בעיה
-לבדוק דרך לשמור את כל המהלכים? צ"ע
-אם זמן התגובה של המנועים ארוך מדי אוליי למצוא דרך לפתוח פול ככה שהכל יהיה בו-זמנית?
-להבין למה הקוד לא מורץ מהטרמינל, מאוד מוזר
-אוליי דיווח על הקריסה לכל הקליינטים אחרי שגיאה או שאין צורך
-כן להבין איך הקליינט ידע שהשרת קרס וידע לסיים את הריצה או משהו כזה, אוליי לחכות שהשרת יחזור
-"""

@@ -16,6 +16,7 @@ PROTOCOL_CLIENT = {
     "first_login_msg": "NEW_LOGIN",
     "logout_msg": "LOGOUT",
     "my_move_msg": "MY_MOVE",
+    "quit_game_msg": "QUIT_GAME",
     "multiplayer": "PVP",
     "single-player": "PVE",
     "get_my_rating": "MY_RATING",
@@ -96,7 +97,7 @@ def split_data(msg, expected_fields):
 
 def join_data(msg_fields):
     """
-    Helper method. Gets a list, joins all of it's fields to one string divided by the data delimiter.
+    Helper method. Gets a list, joins all of its fields to one string divided by the data delimiter.
     Returns: string that looks like cell1#cell2#cell3
     """
     msg = ""
@@ -106,4 +107,3 @@ def join_data(msg_fields):
             msg += msg_fields[i] + DATA_DELIMITER
         msg += msg_fields[-1]
     return msg
-
