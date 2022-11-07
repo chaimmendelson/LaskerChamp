@@ -172,8 +172,7 @@ def play_game(conn, pvp=True):
 
 def connect():
     global SERVER_IP
-    # SERVER_IP = os_values.set_server_ip()
-    SERVER_IP = '127.0.0.1'
+    SERVER_IP = os_values.set_server_ip()
     the_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     the_socket.connect((SERVER_IP, SERVER_PORT))
     return the_socket

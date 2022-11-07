@@ -406,7 +406,7 @@ def main():
     print("Welcome to chess Server!")
     server_socket = setup_socket()
     os_values.set_user()
-    # hd.reset_table()
+    hd.reset_table()
     print("listening for clients...")
     client_sockets = []
     try:
