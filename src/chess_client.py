@@ -1,7 +1,10 @@
 import socket
+import timeit
+import time
 import chess_chatlib as chatlib
 import os_values
 import re
+from threading import Thread
 
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 5678
@@ -117,7 +120,7 @@ def get_move_and_send(conn):
                 build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["quit_game_msg"], '')
                 print("you have quited the game")
                 return 'quit'
-        elif re.fullmatch(r'^[a-h][1-8][a-h][1-8][q,r,b,n]?$', move):
+        elif re.fullmatch(r'^[a-h][1-8][a-h][1-8][qrbn]?$', move):
             break
     build_and_send_message(conn, chatlib.PROTOCOL_CLIENT['my_move_msg'], move)
     return 'sent'
@@ -169,7 +172,8 @@ def play_game(conn, pvp=True):
 
 def connect():
     global SERVER_IP
-    SERVER_IP = os_values.set_server_ip()
+    # SERVER_IP = os_values.set_server_ip()
+    SERVER_IP = '127.0.0.1'
     the_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     the_socket.connect((SERVER_IP, SERVER_PORT))
     return the_socket
@@ -182,9 +186,9 @@ def error_and_exit(error_msg):
 
 def first_login(conn):
     while True:
-        username = input("Please enter new username: ")
-        password = input("please enter new password: ")
-        email = input("please enter your email: ")
+        username = input("enter new username: ")
+        password = input("enter new password: ")
+        email = input("enter your email: ")
         build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["first_login_msg"], chatlib.join_data([username, password, email]))
         cmd, data = recv_message_and_parse(conn)
         if cmd == chatlib.PROTOCOL_SERVER["account_created_msg"]:
@@ -197,8 +201,8 @@ def first_login(conn):
 
 def login(conn):
     while True:
-        username = input("Please enter username: ")
-        password = input("please enter password: ")
+        username = input("enter username: ")
+        password = input("enter password: ")
         build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["login_msg"], chatlib.join_data([username, password]))
         cmd, data = recv_message_and_parse(conn)
         if cmd == chatlib.PROTOCOL_SERVER["login_ok_msg"]:
@@ -212,6 +216,25 @@ def logout(conn):
     conn.close()
     print("goodbye")
 
+
+def dos2():
+    start = timeit.default_timer()
+    for i in range(10000):
+        conn = connect()
+        logout(conn)
+    stop = timeit.default_timer()
+    print(stop - start)
+
+
+def dos():
+    conn_list = []
+    start = timeit.default_timer()
+    for i in range(1000):
+        conn_list.append(connect())
+    for conn in conn_list:
+        build_and_send_message(conn, chatlib.PROTOCOL_CLIENT["login_msg"], chatlib.join_data(['test', 'test1234']))
+    stop = timeit.default_timer()
+    print(stop - start)
 
 def main():
     conn = connect()
@@ -228,7 +251,7 @@ def main():
               "s        Get my rating\n"
               "l        Get logged users list\n"
               "q        Quit\n")
-        choice = input("Please enter your choice:")
+        choice = input("enter choice:")
         if choice == "s":
             get_rating(conn)
         elif choice == "p":
@@ -241,4 +264,4 @@ def main():
             break
     logout(conn)
 if __name__ == '__main__':
-    main()
+    dos2()

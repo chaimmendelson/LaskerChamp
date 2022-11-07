@@ -3,6 +3,7 @@
 ##############################################################################
 import socket
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import chess_chatlib as chatlib
 import select
@@ -17,10 +18,14 @@ import handle_database as hd
 # GLOBALS
 import os_values
 
+EXECUTOR = ThreadPoolExecutor(max_workers=10)
+BLACK_LIST = []
+MSG_COUNT = {}
+LAST_COUNT_RESET = datetime.now()
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 MESSAGES_TO_SEND = []
 LOGGED_USERS_CONN = {}
-WAITING_ROOM ={}
+WAITING_ROOM = {}
 OPPONENT_QUIT_DURING_TURN = []
 CREATION_THREAD = []
 ERROR_MSG = "Error!"
@@ -45,11 +50,11 @@ def print_log(conn, msg, from_client=True):
     if conn in LOGGED_USERS_CONN.values():
         player = get_username(conn)
     else:
-        player = conn.getpeername()[0]
+        player = get_ip(conn)
     text = 'sending to'
     if from_client:
         text = 'sent from '
-    print(f"{text} [{player}]: {' '*(spaces - len(player))}{msg}")
+    print(f"{text} [{player}]: {' ' * (spaces - len(player))}{msg}")
 
 
 def build_and_send_message(conn, code, data):
@@ -74,7 +79,7 @@ def setup_socket():
             server_socket.listen()
             break
         except:
-            time.sleep(5)
+            time.sleep(1)
     return server_socket
 
 
@@ -96,7 +101,8 @@ def handle_pvp_request_message(username):
         w_player = chess_rooms.get_white_player(username)
         msg = chatlib.PROTOCOL_SERVER["game_started_msg"]
         build_and_send_message(get_conn(w_player), msg, chatlib.join_data(['white', START_FEN]))
-        build_and_send_message(get_conn(chess_rooms.get_opponent(w_player)), msg, chatlib.join_data(['black', START_FEN]))
+        build_and_send_message(get_conn(chess_rooms.get_opponent(w_player)), msg,
+                               chatlib.join_data(['black', START_FEN]))
         hd.update_games_played(username, 1)
         hd.update_games_played(opponent, 1)
     else:
@@ -137,6 +143,8 @@ def handle_move_message(username, data):
     else:
         state, msg = chess_rooms.commit_move(username, data)
         if not state:
+            if username in OPPONENT_QUIT_DURING_TURN:
+                build_and_send_message(get_conn(username), chatlib.PROTOCOL_SERVER["opponent_quit_msg"], '')
             build_and_send_message(get_conn(username), chatlib.PROTOCOL_SERVER['invalid_move_msg'], data)
         elif chess_rooms.is_game_over(username):
             handle_game_over(username)
@@ -183,6 +191,15 @@ def update_players():
                     chess_rooms.get_engine_move(user)
 
 
+def game_update_req(username):
+    if not chess_rooms.is_in_room(username):
+        build_and_send_message(get_conn(username), chatlib.PROTOCOL_SERVER['not_in_room_msg'], '')
+    if username in OPPONENT_QUIT_DURING_TURN:
+        build_and_send_message(get_conn(username), chatlib.PROTOCOL_SERVER["opponent_quit_msg"], '')
+    else:
+        build_and_send_message(get_conn(username), chatlib.PROTOCOL_SERVER["no_update"], '')
+
+
 def send_opponent_msg(user):
     opponent_move = chess_rooms.get_last_move(user)
     data = chatlib.join_data([opponent_move, chess_rooms.get_fen(user)])
@@ -226,7 +243,7 @@ def update_elo(user, is_game_over=True):
 
 def handle_logout_message(conn):
     global LOGGED_USERS_CONN, WAITING_ROOM
-    user = conn.getpeername()[0]
+    user = get_ip(conn)
     if conn in LOGGED_USERS_CONN.values():
         user = get_username(conn)
         if user in list(WAITING_ROOM.keys()):
@@ -277,7 +294,7 @@ def handle_registration_message(conn, data):
         build_and_send_message(conn, chatlib.PROTOCOL_SERVER['invalid_data_msg'], msg)
         return
     CREATION_THREAD.append(conn.getpeername())
-    threading.Thread(target=registration_thread, args=(conn, data, )).start()
+    EXECUTOR.submit(registration_thread, conn, data)
 
 
 def handle_client_message(conn, cmd, data):
@@ -298,6 +315,8 @@ def handle_client_message(conn, cmd, data):
         handle_move_message(username, data)
     elif cmd == chatlib.PROTOCOL_CLIENT["quit_game_msg"]:
         handle_quit_msg(username)
+    elif cmd == chatlib.PROTOCOL_CLIENT["get_update"]:
+        game_update_req(username)
     elif cmd == chatlib.PROTOCOL_CLIENT["get_my_rating"]:
         handle_get_rating_message(username)
     elif cmd == chatlib.PROTOCOL_CLIENT["multiplayer"]:
@@ -324,36 +343,89 @@ def print_client_sockets():
         print(f"{c}\t")
 
 
+def get_ip(conn):
+    try:
+        ip = conn.getpeername()[0]
+    except OSError:
+        ip = '0.0.0.0'
+    return ip
+
+
+def update_black_list(client_conn: socket.socket, clients: list) -> list:
+    global BLACK_LIST
+    ip = get_ip(client_conn)
+    client_conn.close()
+    BLACK_LIST.append(ip)
+    temp = clients.copy()
+    for conn in temp:
+        if get_ip(conn) == ip:
+            handle_logout_message(conn)
+            clients.remove(conn)
+    return clients
+
+
+def update_msg_follow():
+    global MSG_COUNT, LAST_COUNT_RESET
+    now = datetime.now()
+    difference = now - LAST_COUNT_RESET
+    if difference.seconds > 1:
+        MSG_COUNT = {}
+        LAST_COUNT_RESET = datetime().now()
+
+
+def msg_count_update(client_conn, clients):
+    global MSG_COUNT
+    ip = get_ip(client_conn)
+    if ip in MSG_COUNT:
+        MSG_COUNT[ip] += 1
+        if MSG_COUNT[ip] >= 5:
+            return update_black_list(client_conn, clients)
+    else:
+        MSG_COUNT[ip] = 1
+    return clients
+            
+
+
 def main():
-    global MESSAGES_TO_SEND
+    global MESSAGES_TO_SEND, BLACK_LIST
     print("Welcome to chess Server!")
     server_socket = setup_socket()
     os_values.set_user()
-    hd.reset_table()
+    # hd.reset_table()
     print("listening for clients...")
     client_sockets = []
     try:
         while True:
+            update_msg_follow()
             check_waiting_room()
             update_players()
             ready_to_read, ready_to_write, in_error = select.select([server_socket] + client_sockets, client_sockets, [])
             for current_socket in ready_to_read:
                 if current_socket is server_socket:
                     (client_socket, client_address) = current_socket.accept()
-                    print("new client joined!", client_address)
-                    client_sockets.append(client_socket)
+                    ip = get_ip(client_socket)
+                    if ip in BLACK_LIST:
+                        client_socket.close()
+                    else:
+                        count = len(list(filter(lambda obj: get_ip(obj) == ip, client_sockets)))
+                        if count < 5:
+                            print("new client joined!", client_address)
+                            client_sockets.append(client_socket)
+                        else:
+                            client_sockets = update_black_list(client_socket, client_sockets)
                 else:
                     try:
                         cmd, data = recv_message_and_parse(current_socket)
                     except ConnectionResetError:
+                        print(1)
                         client_sockets.remove(current_socket)
                         handle_logout_message(current_socket)
-                        print_client_sockets()
                     else:
                         if cmd == "" or cmd is None or cmd == chatlib.PROTOCOL_CLIENT["logout_msg"]:
+                            print(2)
+
                             client_sockets.remove(current_socket)
                             handle_logout_message(current_socket)
-                            print_client_sockets()
                         else:
                             handle_client_message(current_socket, cmd, data)
             for message in MESSAGES_TO_SEND:
@@ -363,13 +435,12 @@ def main():
                     conn.send(data.encode())
                     MESSAGES_TO_SEND.remove(message)
     except:
-        conn_list = list(LOGGED_USERS_CONN.values())
-        for client in conn_list:
-            handle_logout_message(client)
         server_socket.close()
+        os_values.DB_CONN.close()
         print("\nserver crash due to an unexpected error as shown below")
         logging.error(traceback.format_exc())
 
 
 if __name__ == '__main__':
     main()
+    

@@ -1,6 +1,6 @@
 # Protocol Constants
 
-CMD_FIELD_LENGTH = 32  # Exact length of cmd field (in bytes)
+CMD_FIELD_LENGTH = 16  # Exact length of cmd field (in bytes)
 LENGTH_FIELD_LENGTH = 4  # Exact length of length field (in bytes)
 MAX_DATA_LENGTH = 10 ** LENGTH_FIELD_LENGTH - 1  # Max size of data field according to protocol
 MSG_HEADER_LENGTH = CMD_FIELD_LENGTH + 1 + LENGTH_FIELD_LENGTH + 1  # Exact size of header (CMD+LENGTH fields)
@@ -16,6 +16,7 @@ PROTOCOL_CLIENT = {
     "first_login_msg": "NEW_LOGIN",
     "logout_msg": "LOGOUT",
     "my_move_msg": "MY_MOVE",
+    "get_update": "UPDATE",
     "quit_game_msg": "QUIT_GAME",
     "multiplayer": "PVP",
     "single-player": "PVE",
@@ -30,8 +31,8 @@ PROTOCOL_SERVER = {
     "invalid_data_msg": "INVALID_DATA",
     "login_failed_msg": "ERROR",
     "logged_users": "LOGGED_USERS",
-    "looking_for_opponent_msg": "LOOKING_FOR_OPPONENT",
-    "no_opponent_found_msg": "NO_OPPONENT_FOUND",
+    "looking_for_opponent_msg": "FINDING_OPPONENT",
+    "no_opponent_found_msg": "NO_OPPONENT",
     "game_started_msg": "GAME_STARTED",
     "opponent_quit_msg": "OPPONENT_QUIT",
     "your_move_msg": "YOUR_MOVE",
@@ -40,7 +41,8 @@ PROTOCOL_SERVER = {
     "opponent_move_msg": "OPPONENT_MOVE",
     "game_over_msg": "GAME_OVER",
     "get_rating_msg": "YOUR_RATING",
-    "logged_users_msg": "LOGGED_USERS_NAMES",
+    "logged_users_msg": "LOGGED_USERS",
+    "no_update_msg": "NO_UPDATE",
 
     "you_won": "you won",
     "you_lost": 'you lost',

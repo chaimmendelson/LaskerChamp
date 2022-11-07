@@ -3,43 +3,63 @@ import timeit
 import accounts_database as db
 from datetime import datetime
 
+import os_values
+
 
 def hash(password):
     return hashlib.sha512(password.encode()).hexdigest()
 
 
-def is_username_valid(username):
+def return_username_error(username):
     if type(username) == str:
-        if username.isalnum():
-            if 0 < len(username) < db.get_len(db.USERNAME):
-                return True
-    return False
+        if 3 <= len(username) <= db.get_len(db.USERNAME):
+            if username.isalnum():
+                if username[0].isalpha():
+                    return db.VALID
+                return 'username must start with a letter'
+            return 'username must contain only numbers and letters'
+        return 'username must be at least 3 digits and no more then 32 digits'
+    return 'username must be a string'
+
+
+def is_username_valid(username):
+    return return_username_error(username) == db.VALID
+
+
+def return_password_error(password):
+    if type(password) == str:
+        if 8 <= len(password) <= db.get_len(db.USERNAME):
+            if password.isalnum():
+                if any(char.isdigit() for char in password) and any(char.islower() for char in password):
+                    return db.VALID
+                return 'password must contain at least one number and one letter'
+            return 'password must contain only numbers and letters'
+        return 'password must be at least 8 digits and no more then 32 digits'
+    return 'password must be a string'
 
 
 def is_password_valid(password):
-    if type(password) == str:
-        if password.isalnum():
-            if 0 < len(password) < db.get_len(db.USERNAME):
-                return True
-    return False
+    return return_password_error(password) == db.VALID
 
 
 def is_email_valid(email):
-    return db.is_email_valid(email)
+    if db.is_email_valid(email):
+        return db.VALID
+    return 'invalid email'
 
 
 def create_new_user(username, password, email):
-    if is_username_valid(username):
-        if is_password_valid(password):
+    if is_username_valid(username) == db.VALID:
+        if is_password_valid(password) == db.VALID:
             status, column = db.insert_new_user([username, hash(password), email, '1200', '0', db.USER])
             if status == db.VALID:
                 return "account created"
             if status == db.INVALID_VALUE_ERROR:
-                return f"invalid {column}"
+                return f"invalid email"
             if status == db.ALREADY_EXISTS_ERROR:
                 return f"{column} already exists"
-        return f"invalid {db.PASSWORD}"
-    return f"invalid {db.USERNAME}"
+        return return_password_error(password)
+    return return_username_error(username)
 
 
 def delete_user(username):
@@ -59,8 +79,9 @@ def does_username_exist(username):
 
 def update_username(username, password, new_username):
     if check_password(username, password):
-        db.update_value(username, db.USERNAME, new_username)
-        return True
+        if is_username_valid(username):
+            db.update_value(username, db.USERNAME, new_username)
+            return True
     return False
 
 
@@ -125,22 +146,46 @@ def admin_reset_password(username):
     return False
 
 
-def set_admin(password, username):
+def get_permission(username):
+    return db.get_value(username, db.PERMISSIONS)
+
+
+def is_owner(username, password):
     if does_username_exist(username):
-        if db.get_value(username, db.PERMISSIONS) == db.ADMIN:
-            if check_password('admin', admin_password):
-                if does_username_exist(user_to_set):
-                    pass
+        if get_permission(username) == db.OWNER:
+            if check_password(username, password):
+                return True
+    return False
 
 
-OWNER_PASSWORD = hashlib.sha384('chaim'.encode()).hexdigest()[34:61]
+def set_admin(owner_name, password, username):  # owner only
+    if is_owner(owner_name, password):
+        if does_username_exist(username):
+            db.update_value(username, db.PERMISSIONS, db.ADMIN)
+            return True
+    return False
+
+
+def get_owner_password():
+    text = hashlib.sha384('the python mendelson'.encode()).hexdigest()
+    password = ''
+    for i in range(0, len(text), 4):
+        password += text[i]
+    return password
+
+
+def create_owner():
+    name = 'python'
+    create_new_user(name, get_owner_password(), 'chaimke2005@gmail.com')
+    db.update_value(name, db.PERMISSIONS, db.OWNER)
 
 
 def reset_table():
     db.reset_table()
-    create_new_user()
-    create_new_user('admin', hashlib.sha384('chaim mendelson 2005')[30:63], 'chaimke2005@gmail.com')
-    create_new_user('test', 'test', 'chaimm2005@gmail.com')
+    create_owner()
+    create_new_user('aviad', 'aviad12344', 'aviad.bagno@gmail.com')
+    set_admin('python', get_owner_password(), 'aviad')
+    create_new_user('test', 'test12345', 'chaimm2005@gmail.com')
 
 
 def test():
@@ -151,6 +196,9 @@ def test():
     stop = timeit.default_timer()
     print('Time: ', stop - start)
     print(db.printable_table(db.get_all_users()))"""
-    print(OWNER_PASSWORD)
+    os_values.set_database_conn()
+    reset_table()
+    print(db.printable_table(db.get_all_users()))
+    os_values.DB_CONN.close()
 if __name__ == '__main__':
     test()

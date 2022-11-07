@@ -1,4 +1,7 @@
 import re
+
+import psycopg2 as pg2
+
 import os_values
 import requests
 
@@ -63,18 +66,13 @@ def get_constrains(column):
     return None
 
 
-def execute(code, fetchall=False, fetchmany=False, amount=1):
-    data = ""
-    connection = os_values.get_database_conn()
+def execute(code, return_cursor=False):
+    connection = os_values.DB_CONN
     cursor = connection.cursor()
     cursor.execute(code)
-    if fetchall:
-        data = cursor.fetchall()
-    if fetchmany:
-        data = cursor.fetchmany(amount)
-    connection.commit()
-    connection.close()
-    return data
+    if return_cursor:
+        return cursor
+    cursor.close()
 
 
 def create_table():
@@ -100,7 +98,11 @@ def reset_table():
 
 def is_value_in_column(column, value):
     if column in COLUMNS:
-        return execute(f"select * from {TABLE_NAME} where {column} = '{value}';", fetchmany=True) != []
+        cursor = execute(f"select * from {TABLE_NAME} where {column} = '{value}';", return_cursor=True)
+        data = cursor.fetchone()
+        cursor.close()
+        if data:
+            return True
     return False
 
 
@@ -165,11 +167,16 @@ def insert_new_user(user_data):
 
 
 def get_all_users():
-    return execute(f'select * from {TABLE_NAME};', fetchall=True)
+    columns = COLUMNS_L.copy()
+    columns.remove(PASSWORD)
+    cursor = execute(f"select {', '.join(columns)} from {TABLE_NAME};", return_cursor=True)
+    data = cursor.fetchall()
+    cursor.close()
+    return data
 
 
-def printable_table(table):
-    table.insert(0, COLUMNS_L)
+def printable_table(table, columns):
+    table.insert(0, columns)
     for i in range(len(table)):
         table[i] = list(table[i])
         for j in range(len(table[0])):
@@ -202,8 +209,9 @@ def is_email_valid(email):
 
 def get_value(username, column):
     if is_value_in_column(USERNAME, username) and column in COLUMNS:
-        data = execute(f"select {column} from {TABLE_NAME} where {USERNAME} = '{username}';", fetchmany=True)
-        return data[0][0]
+        cursor = execute(f"select {column} from {TABLE_NAME} where {USERNAME} = '{username}';", return_cursor=True)
+        data = cursor.fetchone()
+        return data[0]
     return None
 
 
@@ -225,7 +233,10 @@ def update_entry(username):
 
 
 def main():
-    print(printable_table(get_all_users()))
+    os_values.set_database_conn()
+    columns = COLUMNS_L.copy()
+    columns.remove(PASSWORD)
+    print(printable_table(get_all_users(), columns))
 
 
 if __name__ == '__main__':

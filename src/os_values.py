@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import timeit
 from platform import uname
@@ -10,6 +11,8 @@ ELCHAI = 'elchai'
 SERVER = 'server'
 USERS_l = [CHAIM, ELCHAI, SERVER]
 USER = CHAIM
+
+DB_CONN = None
 
 
 def set_user():
@@ -30,6 +33,7 @@ def set_user():
         if 'down' in status:
             os.system("sudo service postgresql start")
         print("database operational")
+    set_database_conn()
 
 
 def set_server_ip():
@@ -51,12 +55,14 @@ def get_stockfish_path():
             return r"/usr/local/bin/stockfish"
 
 
-def get_database_conn():
+def set_database_conn():
+    global DB_CONN
     if uname().system == 'Windows' and USER == CHAIM:
-        return pg2.connect(database='chess_users', user='postgres', password=132005)
+        DB_CONN = pg2.connect(database='chess_users', user='postgres', password=132005)
     else:
         connect_str = "dbname='chess_users' user='lasker' host='localhost' password='132005'"
-        return pg2.connect(connect_str)
+        DB_CONN = pg2.connect(connect_str)
+    DB_CONN.autocommit = True
 
 
 def update_elo_tester():
@@ -76,23 +82,25 @@ def update_elo_tester():
     print(o_new_elo)
 
 
-def input_thread():
-    time.sleep(2)
+def input_thread(name, age):
+    print(f"{name}, {age}\n")
 
 
 # from multiprocessing.pool import ThreadPool
 
-
 def main():
     executor = ThreadPoolExecutor(max_workers=10)
     start = timeit.default_timer()
-    for i in range(1000):
-        executor.submit(input_thread)
-    a = executor.submit(input_thread)
-    while not a.done():
-        time.sleep(1)
+    a = executor.submit(input_thread, 'chaim', 10)
+    a.cancel()
     stop = timeit.default_timer()
     print(stop - start)
+
+
+def send_whatsapp_msg():
+    import pywhatkit
+    #pywhatkit.info("tty (Unix)")
+    pywhatkit.sendwhatmsg_instantly("+972587934941", "using a python bot here, just testing")
 
 
 if __name__ == '__main__':

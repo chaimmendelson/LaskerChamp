@@ -9,6 +9,7 @@ import os_values
 
 START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
+
 pieces = {
     'P': u'\u265F',
     'R': u'\u265C',
