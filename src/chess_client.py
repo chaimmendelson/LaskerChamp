@@ -219,7 +219,7 @@ def logout(conn):
 
 def dos2():
     start = timeit.default_timer()
-    for i in range(10000):
+    for i in range(100):
         conn = connect()
         logout(conn)
     stop = timeit.default_timer()
@@ -264,4 +264,4 @@ def main():
             break
     logout(conn)
 if __name__ == '__main__':
-    dos2()
+    main()

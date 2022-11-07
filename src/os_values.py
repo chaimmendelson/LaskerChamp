@@ -8,8 +8,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 CHAIM = 'chaim'
 ELCHAI = 'elchai'
-SERVER = 'server'
-USERS_l = [CHAIM, ELCHAI, SERVER]
+CLOUD_SERVER = 'cloud_server'
+BAGNO_SERVER = 'bagno_server'
+USERS_l = [CHAIM, ELCHAI, CLOUD_SERVER, BAGNO_SERVER]
 USER = CHAIM
 
 DB_CONN = None
@@ -49,7 +50,7 @@ def get_stockfish_path():
     if uname().system == 'Windows' and USER == CHAIM:
         return r"C:\Users\chaim\OneDrive\Desktop\python\stockfish_15_win_x64_avx2\stockfish_15_x64_avx2.exe"
     else:
-        if USER == SERVER:
+        if USER == CLOUD_SERVER:
             return r"/home/elchairoy/Stockfish/src/stockfish"
         else:
             return r"/usr/local/bin/stockfish"
@@ -89,18 +90,21 @@ def input_thread(name, age):
 # from multiprocessing.pool import ThreadPool
 
 def main():
-    executor = ThreadPoolExecutor(max_workers=10)
-    start = timeit.default_timer()
-    a = executor.submit(input_thread, 'chaim', 10)
-    a.cancel()
-    stop = timeit.default_timer()
-    print(stop - start)
+    # executor = ThreadPoolExecutor(max_workers=10)
+    # start = timeit.default_timer()
+    # a = executor.submit(input_thread, 'chaim', 10)
+    # a.cancel()
+    # stop = timeit.default_timer()
+    # print(stop - start)
+    if uname().system == 'Windows':
+        send_whatsapp_msg()
 
 
 def send_whatsapp_msg():
     import pywhatkit
-    #pywhatkit.info("tty (Unix)")
-    pywhatkit.sendwhatmsg_instantly("+972587934941", "using a python bot here, just testing")
+    elchai = "+972559328853"
+    me = "+972536239778"
+    pywhatkit.sendwhatmsg_instantly("+972559328853", "using a python bot here, just testing", wait_time=10, tab_close=True)
 
 
 if __name__ == '__main__':

@@ -370,20 +370,35 @@ def update_msg_follow():
     difference = now - LAST_COUNT_RESET
     if difference.seconds > 1:
         MSG_COUNT = {}
-        LAST_COUNT_RESET = datetime().now()
+        LAST_COUNT_RESET = datetime.now()
 
 
-def msg_count_update(client_conn, clients):
+def msg_count_update(client_conn: socket.socket):
     global MSG_COUNT
     ip = get_ip(client_conn)
     if ip in MSG_COUNT:
         MSG_COUNT[ip] += 1
-        if MSG_COUNT[ip] >= 5:
-            return update_black_list(client_conn, clients)
     else:
         MSG_COUNT[ip] = 1
-    return clients
             
+
+
+def spam_check(clients) -> list:
+    global MSG_COUNT
+    temp = clients.copy()
+    error_clients = []
+    for ip, count in MSG_COUNT.items():
+        if count > 5:
+            error_clients.append(ip)
+    for ip in error_clients:
+        if ip not in BLACK_LIST:
+            BLACK_LIST.append(ip)
+        for conn in clients:
+            if get_ip(conn) == ip:
+                handle_logout_message(conn)
+                temp.remove(conn)
+                conn.close()
+    return temp
 
 
 def main():
@@ -396,6 +411,7 @@ def main():
     client_sockets = []
     try:
         while True:
+            client_sockets = spam_check(client_sockets)
             update_msg_follow()
             check_waiting_room()
             update_players()
@@ -417,13 +433,11 @@ def main():
                     try:
                         cmd, data = recv_message_and_parse(current_socket)
                     except ConnectionResetError:
-                        print(1)
                         client_sockets.remove(current_socket)
                         handle_logout_message(current_socket)
                     else:
+                        msg_count_update(current_socket)
                         if cmd == "" or cmd is None or cmd == chatlib.PROTOCOL_CLIENT["logout_msg"]:
-                            print(2)
-
                             client_sockets.remove(current_socket)
                             handle_logout_message(current_socket)
                         else:
@@ -443,4 +457,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
+
+
