@@ -1,7 +1,7 @@
 # Protocol Constants
 
-CMD_FIELD_LENGTH = 16  # Exact length of cmd field (in bytes)
-LENGTH_FIELD_LENGTH = 4  # Exact length of length field (in bytes)
+CMD_FIELD_LENGTH = 32  # Exact length of cmd field (in bytes)
+LENGTH_FIELD_LENGTH = 6  # Exact length of length field (in bytes)
 MAX_DATA_LENGTH = 10 ** LENGTH_FIELD_LENGTH - 1  # Max size of data field according to protocol
 MSG_HEADER_LENGTH = CMD_FIELD_LENGTH + 1 + LENGTH_FIELD_LENGTH + 1  # Exact size of header (CMD+LENGTH fields)
 MAX_MSG_LENGTH = MSG_HEADER_LENGTH + MAX_DATA_LENGTH  # Max size of total message
@@ -48,6 +48,39 @@ PROTOCOL_SERVER = {
     "you_lost": 'you lost',
     "tie": 'tie'
 }
+
+
+PROTOCOL_OWNER = {
+    "get_all_users": "GET_ALL_USERS",
+    "get_blocked_users": "GET_BLOCKED_USERS",
+    "get_active_users": "GET_ACTIVE_USERS",
+    "unblock_user": "UNBLOCK_USER",
+    "delete_user": "DELETE_USER",
+    "block_user": "BLOCK_USER",
+    "reset_password": "RESET_PASSWORD",
+    "add_admin": "ADD_ADMIN",
+    "remove_admin": "REMOVE_ADMIN",
+    "get_all_games": "GET_ALL_GAMES",
+    "spectate_game": "SPECTATE_GAME",
+    "get_user_data": "GET_USER_DATA",
+}
+
+PROTOCOL_OWNER_SERVER = {
+    "all_users": "ALL_USERS",
+    "blocked_users": "BLOCKED_USERS",
+    "active_users": "ACTIVE_USERS",
+    "user_deleted": "USER_DELETED",
+    "user_blocked": "USER_BLOCKED",
+    "user_unblocked": "USER_UNBLOCKED",
+    "password_reset": "PASSWORD_RESET",
+    "admin_added": "ADMIN_ADDED",
+    "admin_removed": "ADMIN_REMOVED",
+    "all_games": "ALL_GAMES",
+    "move_made": "MOVE_MADE",
+    "game_over": "GAME_OVER ",
+    "user_data": "USER_DATA",
+}
+
 
 ERROR_RETURN = None  # What is returned in case of an error
 

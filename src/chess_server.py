@@ -19,8 +19,10 @@ import handle_database as hd
 import os_values
 
 EXECUTOR = ThreadPoolExecutor(max_workers=10)
+CLIENT_SOCKETS = []
 BLACK_LIST = []
 MSG_COUNT = {}
+FAILED_LOGIN = {}
 LAST_COUNT_RESET = datetime.now()
 START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 MESSAGES_TO_SEND = []
@@ -268,12 +270,14 @@ def handle_login_message(conn, data):
                 build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_ok_msg"], "")
                 LOGGED_USERS_CONN[username] = conn
                 hd.update_entry(username)
+                return
             else:
                 build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "user already logged in")
         else:
             build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "password incorrect")
     else:
         build_and_send_message(conn, chatlib.PROTOCOL_SERVER["login_failed_msg"], "user name doesnt exist")
+    failed_login_update(conn)
 
 
 def registration_thread(conn, data):
@@ -297,18 +301,21 @@ def handle_registration_message(conn, data):
     EXECUTOR.submit(registration_thread, conn, data)
 
 
+def handle_unconnected_client(cmd, conn, data):
+    if conn in CREATION_THREAD:
+        build_and_send_message(conn, chatlib.PROTOCOL_SERVER["server_pending"], "creating account")
+    elif cmd == chatlib.PROTOCOL_CLIENT["login_msg"]:
+        handle_login_message(conn, data)
+    elif cmd == chatlib.PROTOCOL_CLIENT["first_login_msg"]:
+        handle_registration_message(conn, data)
+    else:
+        build_and_send_message(conn, ERROR_MSG, "first log in")
+
+
 def handle_client_message(conn, cmd, data):
     global OPPONENT_QUIT_DURING_TURN
-    client_conn = conn.getpeername()
     if conn not in list(LOGGED_USERS_CONN.values()):
-        if client_conn in CREATION_THREAD:
-            build_and_send_message(conn, chatlib.PROTOCOL_SERVER["server_pending"], "creating account")
-        elif cmd == chatlib.PROTOCOL_CLIENT["login_msg"]:
-            handle_login_message(conn, data)
-        elif cmd == chatlib.PROTOCOL_CLIENT["first_login_msg"]:
-            handle_registration_message(conn, data)
-        else:
-            build_and_send_message(conn, ERROR_MSG, "first log in")
+        handle_unconnected_client(cmd, conn, data)
         return
     username = get_username(conn)
     if cmd == chatlib.PROTOCOL_CLIENT["my_move_msg"]:
@@ -323,10 +330,8 @@ def handle_client_message(conn, cmd, data):
         handle_pvp_request_message(username)
     elif cmd == chatlib.PROTOCOL_CLIENT["single-player"]:
         handle_pve_request_message(username, data)
-    elif cmd == chatlib.PROTOCOL_CLIENT["get_logged_users"]:
-        handle_logged_message(username)
     else:
-        build_and_send_message(conn, ERROR_MSG, "command does not exist")
+        build_and_send_message(conn, ERROR_MSG, "invalid command")
 
 
 def handle_logged_message(user):
@@ -351,17 +356,17 @@ def get_ip(conn):
     return ip
 
 
-def update_black_list(client_conn: socket.socket, clients: list) -> list:
-    global BLACK_LIST
+def update_black_list(client_conn: socket.socket):
+    global BLACK_LIST, CLIENT_SOCKETS
     ip = get_ip(client_conn)
-    client_conn.close()
+    handle_logout_message(client_conn)
+    CLIENT_SOCKETS.remove(client_conn)
     BLACK_LIST.append(ip)
-    temp = clients.copy()
+    temp = CLIENT_SOCKETS.copy()
     for conn in temp:
         if get_ip(conn) == ip:
             handle_logout_message(conn)
-            clients.remove(conn)
-    return clients
+            CLIENT_SOCKETS.remove(conn)
 
 
 def update_msg_follow():
@@ -378,44 +383,41 @@ def msg_count_update(client_conn: socket.socket):
     ip = get_ip(client_conn)
     if ip in MSG_COUNT:
         MSG_COUNT[ip] += 1
+        if MSG_COUNT[ip] > 5:
+            update_black_list(client_conn)
+            return True
     else:
         MSG_COUNT[ip] = 1
+    return False
             
 
-
-def spam_check(clients) -> list:
-    global MSG_COUNT
-    temp = clients.copy()
-    error_clients = []
-    for ip, count in MSG_COUNT.items():
-        if count > 5:
-            error_clients.append(ip)
-    for ip in error_clients:
-        if ip not in BLACK_LIST:
-            BLACK_LIST.append(ip)
-        for conn in clients:
-            if get_ip(conn) == ip:
-                handle_logout_message(conn)
-                temp.remove(conn)
-                conn.close()
-    return temp
+def failed_login_update(client_conn: socket.socket):
+    global FAILED_LOGIN
+    ip = get_ip(client_conn)
+    if ip in FAILED_LOGIN:
+        FAILED_LOGIN[ip] += 1
+        if FAILED_LOGIN[ip] > 3:
+            update_black_list(client_conn)
+            del FAILED_LOGIN[ip]
+            return True
+    else:
+        FAILED_LOGIN[ip] = 1
+    return False
 
 
 def main():
-    global MESSAGES_TO_SEND, BLACK_LIST
+    global MESSAGES_TO_SEND, BLACK_LIST, CLIENT_SOCKETS
     print("Welcome to chess Server!")
     server_socket = setup_socket()
     os_values.set_user()
     hd.reset_table()
     print("listening for clients...")
-    client_sockets = []
     try:
         while True:
-            client_sockets = spam_check(client_sockets)
-            update_msg_follow()
             check_waiting_room()
             update_players()
-            ready_to_read, ready_to_write, in_error = select.select([server_socket] + client_sockets, client_sockets, [])
+            update_msg_follow()
+            ready_to_read, ready_to_write, in_error = select.select([server_socket] + CLIENT_SOCKETS, CLIENT_SOCKETS, [])
             for current_socket in ready_to_read:
                 if current_socket is server_socket:
                     (client_socket, client_address) = current_socket.accept()
@@ -423,30 +425,38 @@ def main():
                     if ip in BLACK_LIST:
                         client_socket.close()
                     else:
-                        count = len(list(filter(lambda obj: get_ip(obj) == ip, client_sockets)))
+                        count = len(list(filter(lambda obj: get_ip(obj) == ip, CLIENT_SOCKETS)))
                         if count < 5:
                             print("new client joined!", client_address)
-                            client_sockets.append(client_socket)
+                            CLIENT_SOCKETS.append(client_socket)
                         else:
-                            client_sockets = update_black_list(client_socket, client_sockets)
+                            update_black_list(client_socket)
                 else:
+                    if get_ip(current_socket) in BLACK_LIST:
+                        continue
                     try:
                         cmd, data = recv_message_and_parse(current_socket)
                     except ConnectionResetError:
-                        client_sockets.remove(current_socket)
+                        CLIENT_SOCKETS.remove(current_socket)
                         handle_logout_message(current_socket)
                     else:
-                        msg_count_update(current_socket)
+                        if msg_count_update(current_socket):
+                            continue
                         if cmd == "" or cmd is None or cmd == chatlib.PROTOCOL_CLIENT["logout_msg"]:
-                            client_sockets.remove(current_socket)
+                            CLIENT_SOCKETS.remove(current_socket)
                             handle_logout_message(current_socket)
                         else:
                             handle_client_message(current_socket, cmd, data)
             for message in MESSAGES_TO_SEND:
                 conn, data = message
-                if conn in ready_to_write:
-                    print_log(conn, data, from_client=False)
-                    conn.send(data.encode())
+                try:
+                    if get_ip(conn) in BLACK_LIST:
+                        MESSAGES_TO_SEND.remove(message)
+                    elif conn in ready_to_write:
+                        conn.send(data.encode())
+                        print_log(conn, data, from_client=False)
+                        MESSAGES_TO_SEND.remove(message)
+                except OSError:
                     MESSAGES_TO_SEND.remove(message)
     except:
         server_socket.close()

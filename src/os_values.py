@@ -58,13 +58,24 @@ def get_stockfish_path():
 
 def set_database_conn():
     global DB_CONN
+    if USER != CHAIM:
+        DB_CONN = db2()
     if uname().system == 'Windows' and USER == CHAIM:
         DB_CONN = pg2.connect(database='chess_users', user='postgres', password=132005)
     else:
         connect_str = "dbname='chess_users' user='lasker' host='localhost' password='132005'"
         DB_CONN = pg2.connect(connect_str)
+
     DB_CONN.autocommit = True
 
+
+def db2():
+    dbname = 'df5ufprlqdf7vu'
+    user = 'etclpmibqharrp'
+    password = 'aca56302ad12416b27cd971adfb965287a955176c422548782c76e32fba594b0'
+    host = 'ec2-52-208-164-5.eu-west-1.compute.amazonaws.com'
+    port = '5432'
+    return pg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
 
 def update_elo_tester():
     """
@@ -90,21 +101,20 @@ def input_thread(name, age):
 # from multiprocessing.pool import ThreadPool
 
 def main():
-    # executor = ThreadPoolExecutor(max_workers=10)
-    # start = timeit.default_timer()
-    # a = executor.submit(input_thread, 'chaim', 10)
-    # a.cancel()
-    # stop = timeit.default_timer()
-    # print(stop - start)
-    if uname().system == 'Windows':
-        send_whatsapp_msg()
+    executor = ThreadPoolExecutor(max_workers=10)
+    start = timeit.default_timer()
+    a = executor.submit(input_thread, 'chaim', 10)
+    a.cancel()
+    stop = timeit.default_timer()
+    print(stop - start)
 
 
 def send_whatsapp_msg():
     import pywhatkit
     elchai = "+972559328853"
     me = "+972536239778"
-    pywhatkit.sendwhatmsg_instantly("+972559328853", "using a python bot here, just testing", wait_time=10, tab_close=True)
+    if uname().system == 'Windows':
+        pywhatkit.sendwhatmsg_instantly(me, "using a python bot here, just testing", tab_close=True)
 
 
 if __name__ == '__main__':

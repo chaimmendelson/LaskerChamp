@@ -139,7 +139,7 @@ def get_creation_date(username):
     return None
 
 
-def admin_reset_password(username):
+def reset_password(username):
     if does_username_exist(username):
         db.update_value(username, db.PASSWORD, hash('default'))
         return True
@@ -150,24 +150,22 @@ def get_permission(username):
     return db.get_value(username, db.PERMISSIONS)
 
 
-def is_owner(username, password):
+def is_owner(username):
     if does_username_exist(username):
         if get_permission(username) == db.OWNER:
-            if check_password(username, password):
-                return True
+            return True
     return False
 
 
-def set_admin(owner_name, password, username):  # owner only
-    if is_owner(owner_name, password):
-        if does_username_exist(username):
-            db.update_value(username, db.PERMISSIONS, db.ADMIN)
+def is_admin(username):
+    if does_username_exist(username):
+        if get_permission(username) in [db.ADMIN, db.OWNER]:
             return True
     return False
 
 
 def get_owner_password():
-    text = hashlib.sha384('the python mendelson'.encode()).hexdigest()
+    text = hashlib.sha384('the python'.encode()).hexdigest()
     password = ''
     for i in range(0, len(text), 4):
         password += text[i]
@@ -184,7 +182,6 @@ def reset_table():
     db.reset_table()
     create_owner()
     create_new_user('aviad', 'aviad12344', 'aviad.bagno@gmail.com')
-    set_admin('python', get_owner_password(), 'aviad')
     create_new_user('test', 'test12345', 'chaimm2005@gmail.com')
 
 
@@ -197,8 +194,9 @@ def test():
     print('Time: ', stop - start)
     print(db.printable_table(db.get_all_users()))"""
     os_values.set_database_conn()
-    reset_table()
-    print(db.printable_table(db.get_all_users()))
+    c = db.COLUMNS_L.copy()
+    c.remove(db.PASSWORD)
+    print(db.printable_table(db.get_all_users(), c))
     os_values.DB_CONN.close()
 if __name__ == '__main__':
     test()

@@ -217,6 +217,8 @@ def logout(conn):
 
 
 def dos2():
+    # create connection, send logout and reopen the connection therefor bypassing dos1 protection
+    # but the server will block the connection after 5 messages if all is good
     start = timeit.default_timer()
     for i in range(100):
         conn = connect()
@@ -225,7 +227,8 @@ def dos2():
     print(stop - start)
 
 
-def dos():
+def dos1():
+    # open many connections, server will block after 5 connections if all is good
     conn_list = []
     start = timeit.default_timer()
     for i in range(1000):
